@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>深圳夜市 · Shenzhen Night Market</title>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:#05070f}
+  canvas{display:block;opacity:0;transition:opacity 2.2s ease}
+  body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:2;
+    background:radial-gradient(ellipse at 50% 48%,transparent 52%,rgba(2,3,10,.62) 100%)}
+</style>
+<script type="importmap">
+{"imports":{
+  "three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+}}
+</script>
+</head>
+<body>
+<script type="module">
+import * as THREE from 'three';
+import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
+import {Reflector} from 'three/addons/objects/Reflector.js';
+import {EffectComposer} from 'three/addons/postprocessing/EffectComposer.js';
+import {RenderPass} from 'three/addons/postprocessing/RenderPass.js';
+import {UnrealBloomPass} from 'three/addons/postprocessing/UnrealBloomPass.js';
+import {OutputPass} from 'three/addons/postprocessing/OutputPass.js';
+
+const renderer = new THREE.WebGLRenderer({antialias:true, powerPreference:'high-performance'});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth,innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.22;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x05070f);
+scene.fog = new THREE.FogExp2(0x05070f, 0.0135);
+
+const camera = new THREE.PerspectiveCamera(45, innerWidth/innerHeight, 0.1, 250);
+
+const rt = new THREE.WebGLRenderTarget(innerWidth,innerHeight,{type:THREE.HalfFloatType,samples:4});
+const composer = new EffectComposer(renderer, rt);
+composer.addPass(new RenderPass(scene,camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth,innerHeight), 0.35, 0.35, 1.05);
+composer.addPass(bloom);
+composer.addPass(new OutputPass());
+
+const matteList=[], glowList=[];
+const IDQ = new THREE.Quaternion();
+function col(c){ return Array.isArray(c)? new THREE.Color(c[0],c[1],c[2]) : new THREE.Color(c); }
+function push(list,x,y,z,sx,sy,sz,c,q){ list.push({p:new THREE.Vector3(x,y,z), s:new THREE.Vector3(sx,sy,sz), c:col(c), q:q||IDQ}); }
+function M(x,y,z,sx,sy,sz,c,q){ push(matteList,x,y,z,sx,sy,sz,c,q); }
+function G(x,y,z,sx,sy,sz,c,q){ push(glowList,x,y,z,sx,sy,sz,c,q); return glowList.length-1; }
+function rnd(a,b){ return a+Math.random()*(b-a); }
+function pick(arr){ return arr[(Math.random()*arr.length)|0]; }
+
+const GLYPHS = {
+  '串':["...##...","########","##.##.##","########","########","##.##.##","########","...##..."],
+  '面':["########","...##...",".######.","##.##.##","##.##.##","########","##....##","########"],
+  '茶':[".##..##.","########","...##...","..####..",".##..##.","########","...##...",".##..##."],
+  '果':[".######.","##.##.##",".######.","...##...","########","..####..",".##..##.","##....##"],
+  '夜':["...##...","########","..##..##","..#####.","..##.##.","..#####.",".##..##.","##....##"],
+  '市':["...##...","########","...##...","########","##.##.##","##.##.##","...##...","...##..."]
+};
+const LATIN = {
+  B:["110","101","110","101","110"], Q:["111","101","101","111","001"],
+  O:["111","101","101","101","111"], P:["110","101","110","100","100"],
+  E:["111","100","110","100","111"], N:["101","111","111","101","101"],
+  H:["101","101","111","101","101"], T:["111","010","010","010","010"],
+  "2":["111","001","111","100","111"], "4":["101","101","111","001","001"],
+  S:["011","100","010","001","110"], U:["101","101","101","101","111"],
+  D:["110","101","101","101","110"], R:["110","101","110","101","101"],
+  L:["100","100","100","100","111"], A:["010","101","111","101","101"],
+  F:["111","100","110","100","100"], " ":["000","000","000","000","000"]
+};
+function latinRows(word){
+  const rows=["","","","",""];
+  for(const ch of word){ const g=LATIN[ch]||LATIN[" "]; for(let r=0;r<5;r++) rows[r]+=g[r]+"0"; }
+  return rows;
+}
+function panel(rows, ox,oy,oz, R,U,N, color, cell=0.22, board=true){
+  const h=rows.length, w=rows[0].length;
+  const rv=new THREE.Vector3(...R), uv=new THREE.Vector3(...U), nv=new THREE.Vector3(...N);
+  const q=new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(rv,uv,nv));
+  const idx=[];
+  if(board){
+    const c=new THREE.Vector3(ox,oy,oz).addScaledVector(nv,-0.09);
+    push(matteList,c.x,c.y,c.z,w*cell+0.28,h*cell+0.28,0.14,0x0c0e14,q);
+  }
+  for(let r=0;r<h;r++) for(let c=0;c<w;c++){
+    if(rows[r][c]!=='1' && rows[r][c]!=='#') continue;
+    const p=new THREE.Vector3(ox,oy,oz)
+      .addScaledVector(rv,(c-(w-1)/2)*cell)
+      .addScaledVector(uv,((h-1)/2-r)*cell)
+      .addScaledVector(nv,0.03);
+    idx.push(G(p.x,p.y,p.z,cell*0.92,cell*0.92,0.12,color,q));
+  }
+  return idx;
+}
+function vSign(x,y,z,chars,R,U,N,color,cell=0.24){
+  const idx=[];
+  chars.forEach((ch,i)=>{
+    const rows=GLYPHS[ch]; if(!rows) return;
+    const oy=y+(chars.length-1-i)*(rows.length*cell+0.3);
+    idx.push(...panel(rows,x,oy,z,R,U,N,color,cell));
+  });
+  return idx;
+}
+
+M(0,-0.5,0, 62,1,46, 0x0e1118);
+const reflector = new Reflector(new THREE.PlaneGeometry(46,14.6),{
+  clipBias:0.003, textureWidth:512, textureHeight:512, color:0x808894
+});
+reflector.rotation.x = -Math.PI/2;
+reflector.position.y = 0.02;
+scene.add(reflector);
+
+for(let i=0;i<460;i++){
+  const x=rnd(-22.5,22.5), z=rnd(-7,7);
+  M(x,0.045,z, rnd(0.25,0.95),0.05,rnd(0.25,0.95), pick([0x10131a,0x141821,0x0d1017,0x171c26]),
+    new THREE.Quaternion().setFromEuler(new THREE.Euler(0,rnd(0,Math.PI),0)));
+}
+for(let s=-1;s<=1;s+=2){
+  for(let x=-23;x<23;x+=1.16) for(let z=7.35;z<9.5;z+=1.16)
+    M(x+0.58,0.09,s*(z+0.58), 1.1,0.18,1.1, pick([0x232733,0x262a36,0x20242e]));
+  M(0,0.13,s*7.12, 46.5,0.26,0.3, 0x2c303c);
+}
+M(5,0.05,-2, 1.3,0.06,1.3, 0x181c24);
+M(5,0.085,-2, 1.0,0.02,1.0, 0x0c0f15);
+for(const dx of [-9,14]) M(dx,0.05,6.6, 1.6,0.06,0.5, 0x0b0e14);
+
+function building(x0,x1,zSide,h,base){
+  const w=x1-x0, cx=(x0+x1)/2, zf=zSide*9.5, zb=zSide*15.5;
+  M(cx,h/2+0.18,(zf+zb)/2, w,h,6, base);
+  M(cx,h+0.3,(zf+zb)/2, w+0.3,0.35,6.3, 0x2a2e3a);
+  const faceZ = zf - zSide*0.06;
+  for(let wx=x0+0.9; wx<x1-0.6; wx+=1.45){
+    for(let wy=2.2; wy<h-0.8; wy+=1.7){
+      if(Math.random()<0.36){
+        const warm=Math.random()<0.7;
+        G(wx,wy,faceZ, 0.72,0.95,0.1, warm?[0.85,0.58,0.32]:[0.38,0.62,0.88]);
+      } else M(wx,wy,faceZ, 0.72,0.95,0.1, 0x12151d);
+      if(Math.random()<0.18) M(wx,wy-0.85,faceZ-zSide*0.28, 0.8,0.5,0.55, 0x30343f);
+    }
+  }
+  if(Math.random()<0.7) M(cx+rnd(-w/4,w/4),h+0.9,zb-zSide*1.4, 1.6,1.3,1.6, 0x3a3f4c);
+  if(Math.random()<0.6) M(cx+rnd(-w/4,w/4),h+1.6,zb-zSide*2.2, 0.08,2.6,0.08, 0x20242e);
+  M(cx,1.0,faceZ-zSide*0.1, w*0.8,1.6,0.15, 0x171a23);
+  const backZ = zb + zSide*0.06;
+  for(let wx=x0+1.2; wx<x1-0.8; wx+=2.2) for(let wy=2.5; wy<h-1; wy+=2.4)
+    if(Math.random()<0.22) G(wx,wy,backZ, 0.6,0.8,0.1, [0.5,0.4,0.26]);
+}
+const north=[[-19,-13,12],[-13,-6,16],[-6,1,10],[1,8,15],[8,14,11],[14,19,13]];
+const south=[[-19,-12,14],[-12,-5,10],[-5,2,17],[2,9,12],[9,15,15],[15,19,11]];
+for(const [a,b,h] of north) building(a,b,-1,h,pick([0x1a1d26,0x20242e,0x171a22,0x1d2029]));
+for(const [a,b,h] of south) building(a,b,1,h,pick([0x1a1d26,0x20242e,0x171a22,0x1d2029]));
+
+panel(GLYPHS['夜'], 3.0,12.2,-9.42, [1,0,0],[0,1,0],[0,0,1], [2.0,0.32,1.0], 0.46);
+panel(GLYPHS['市'], 6.9,12.2,-9.42, [1,0,0],[0,1,0],[0,0,1], [2.0,0.32,1.0], 0.46);
+G(4.95,10.1,-9.4, 8.6,0.1,0.1, [1.7,0.28,0.85]);
+G(4.95,14.3,-9.4, 8.6,0.1,0.1, [1.7,0.28,0.85]);
+
+const flickerIdx = vSign(-12.0,6.0,9.42, ['茶','果'], [-1,0,0],[0,1,0],[0,0,-1], [0.4,2.4,1.7], 0.3);
+vSign(2.0,6.4,9.42, ['面'], [-1,0,0],[0,1,0],[0,0,-1], [2.5,0.5,1.6], 0.3);
+vSign(9.0,5.6,9.42, ['串'], [-1,0,0],[0,1,0],[0,0,-1], [2.6,1.1,0.25], 0.3);
+const blade1 = vSign(-6.0,6.2,-9.3, ['串','面'], [0,0,-1],[0,1,0],[1,0,0], [2.6,0.45,1.5], 0.28);
+vSign(8.0,6.0,-9.3, ['茶'], [0,0,1],[0,1,0],[-1,0,0], [0.45,2.3,2.0], 0.28);
+panel(latinRows('24H'), -16.5,4.2,9.42, [-1,0,0],[0,1,0],[0,0,-1], [0.5,1.4,2.6], 0.26);
+panel(latinRows('BBQ'), 16.5,4.6,-9.42, [1,0,0],[0,1,0],[0,0,1], [2.6,0.9,0.2], 0.26);
+
+for(let i=0;i<26;i++){
+  const a=rnd(0,Math.PI*2), r=rnd(48,72), h=rnd(10,34), w=rnd(4,9);
+  const x=Math.cos(a)*r, z=Math.sin(a)*r;
+  M(x,h/2,z, w,h,w, 0x0a0d15);
+  for(let k=0;k<6;k++) if(Math.random()<0.5)
+    G(x+rnd(-w/2,w/2)*0.8, rnd(2,h-1), z+(z>0?-1:1)*w/2*0.99, 0.5,0.6,0.1, [0.5,0.45,0.3]);
+}
+G(-34,38,-52, 2.4,2.4,0.6, [1.4,1.5,1.7]);
+for(let i=0;i<50;i++){
+  const a=rnd(0,Math.PI*2), r=rnd(60,95);
+  G(Math.cos(a)*r, rnd(26,60), Math.sin(a)*r, 0.14,0.14,0.14, [0.7,0.8,1.0]);
+}
+
+const emitters=[];
+function emitter(x,y,z,n,spread,color,vel=1.0,life=3.2,size=0.5){
+  emitters.push({x,y,z,n,spread,color,vel,life,size});
+}
+function stool(x,z,c){ M(x,0.5,z, 0.55,0.12,0.55,c); M(x,0.25,z, 0.4,0.4,0.4, 0x14161c); }
+function crate(x,y,z,c,fruit){
+  M(x,y+0.25,z, 1.0,0.5,0.8, 0x6b4a2a);
+  M(x,y+0.52,z, 0.86,0.06,0.66, 0x3a2a18);
+  if(fruit) for(let i=0;i<6;i++) M(x+rnd(-0.32,0.32),y+0.6,z+rnd(-0.22,0.22), 0.22,0.22,0.22, fruit);
+}
+function bottle(x,y,z,c){ M(x,y+0.16,z, 0.12,0.32,0.12,c); M(x,y+0.36,z, 0.05,0.1,0.05,c); }
+function bowl(x,y,z){ M(x,y+0.07,z, 0.3,0.14,0.3, 0xd8d2c4); M(x,y+0.15,z, 0.2,0.04,0.2, 0xc9a24a); }
+function table(x,z){
+  M(x,1.05,z, 1.5,0.1,1.1, 0x8a5a33);
+  M(x,0.55,z, 0.16,1.0,0.16, 0x3a3f4c);
+  M(x,0.06,z, 0.9,0.1,0.7, 0x3a3f4c);
+}
+function wokStation(x,z,f,steam=true){
+  M(x,1.78,z, 1.5,0.22,1.0, 0x23262e);
+  M(x,1.92,z, 1.1,0.1,0.7, 0x0d0f14);
+  for(let i=-1;i<=1;i++) G(x+i*0.32,1.9,z, 0.2,0.12,0.4, [2.4,0.8,0.15]);
+  M(x,2.06,z, 1.05,0.16,0.72, 0x1a1d24);
+  M(x,2.16,z, 0.85,0.08,0.55, 0x2c2016);
+  if(steam) emitter(x,2.3,z, 34, 0.3, 0x9fb2c4, 1.0, 3.4, 0.5);
+}
+function stall(x,z,f,awning,signChar,signColor,latin,latinColor){
+  M(x,0.85,z, 6.4,1.55,1.1, 0x7a4e2c);
+  M(x,1.66,z, 6.6,0.12,1.3, 0x9a6a3c);
+  G(x,1.5,z+f*0.58, 6.2,0.07,0.06, [signColor[0]*0.9,signColor[1]*0.9,signColor[2]*0.9]);
+  for(const px of [-3.1,3.1]) M(x+px,2.2,z+f*0.45, 0.14,4.3,0.14, 0x2c303c);
+  for(let i=0;i<14;i++) M(x-3.25+i*0.5,4.32,z+f*0.35, 0.5,0.14,2.7, awning[i%2]);
+  for(let i=0;i<14;i+=2) M(x-3.25+i*0.5,4.18,z+f*1.62, 0.5,0.22,0.1, awning[i%2]);
+  for(const bx of [-2,0,2]) G(x+bx,4.1,z+f*0.3, 0.16,0.2,0.16, [1.9,1.25,0.6]);
+  panel(GLYPHS[signChar], x-1.9,5.5,z+f*1.55, [f,0,0],[0,1,0],[0,0,f], signColor, 0.24);
+  panel(latinRows(latin), x+1.35,5.5,z+f*1.55, [f,0,0],[0,1,0],[0,0,f], latinColor, 0.2);
+  M(x,2.6,z-f*1.35, 5.8,0.12,0.5, 0x5a3e22);
+  M(x,3.4,z-f*1.35, 5.8,0.12,0.5, 0x5a3e22);
+  for(let i=0;i<9;i++) bottle(x-2.4+i*0.6,2.66,z-f*1.35, pick([0x3f7a4a,0x7a3f3f,0x3f5a7a,0x8a7a3a]));
+  for(let i=0;i<7;i++) bowl(x-1.8+i*0.6,3.46,z-f*1.35);
+  M(x,0.9,z-f*1.5, 6.4,1.8,0.2, 0x1c1f28);
+}
+
+stall(-14,-5.2, 1, [0xb03028,0xd8d2c4], '串', [2.6,1.0,0.2], 'BBQ', [2.6,0.5,0.2]);
+M(-14,1.8,-5.2, 2.6,0.24,1.0, 0x1a1d24);
+for(let i=0;i<8;i++) G(-15.1+i*0.32,1.94,-5.2, 0.22,0.1,0.7, [2.2,0.55,0.1]);
+for(let i=0;i<6;i++){
+  const sx=-15+i*0.42;
+  M(sx,2.06,-5.05, 0.05,0.05,1.15, 0x8a6a3a);
+  for(let k=0;k<3;k++) M(sx,2.1,-5.3+k*0.28, 0.14,0.14,0.2, pick([0xa04a28,0xb06a30,0x8a3a20]));
+}
+emitter(-14,2.2,-5.2, 40, 0.7, 0x5c6670, 1.15, 3.8, 0.6);
+crate(-16.6,0,-3.6,0,0xe08a20); crate(-16.6,0.5,-3.6,0,0xe08a20);
+
+stall(-2,-5.2, 1, [0x2860a8,0xd8d2c4], '面', [0.4,2.2,2.6], 'HOT', [2.4,0.6,0.3]);
+wokStation(-3.2,-5.2,1); wokStation(-0.8,-5.2,1);
+for(let i=0;i<4;i++) bowl(-2+i*0.45,1.72,-4.7);
+M(-4.6,0.9,-4.0, 0.7,1.8,0.7, 0xc9b23a);
+emitter(-2,1.9,-4.7, 8, 0.15, 0x9fb2c4, 0.7, 2.2, 0.28);
+
+stall(10,-5.2, 1, [0xc9a23a,0x3a3f4c], '果', [2.6,0.5,1.4], 'FRESH', [0.5,2.3,0.9]);
+for(let i=0;i<3;i++){
+  M(9.2+i*0.9,2.0+i*0.0,-5.2, 1.0,0.5,0.9, 0xb09060);
+  M(9.2+i*0.9,2.28,-5.2, 0.9,0.08,0.8, 0x8a7048);
+}
+M(10.1,2.6,-5.2, 1.6,0.5,0.9, 0xb09060);
+emitter(10.1,2.95,-5.2, 46, 0.45, 0xa8bccd, 1.2, 3.6, 0.6);
+crate(12.8,0,-3.5,0,0xd04a30); crate(12.8,0,-4.4,0,0x7aa030);
+
+stall(-8,5.2, -1, [0x3a8a4a,0xd8d2c4], '茶', [0.5,2.4,1.0], 'TEA', [2.3,1.6,0.4]);
+M(-8,2.1,5.2, 1.2,0.9,0.9, 0x9aa2b0);
+M(-8,2.62,5.2, 0.9,0.16,0.6, 0x6a7280);
+G(-8.5,2.2,4.72, 0.1,0.1,0.06, [2.0,0.4,0.2]);
+for(let i=0;i<6;i++) M(-9.6+i*0.55,1.8,4.85, 0.18,0.24,0.18, 0xe8e2d4);
+emitter(-8,2.8,5.2, 16, 0.2, 0x9fb2c4, 0.8, 2.6, 0.35);
+crate(-10.8,0,3.6,0,0xe08a20); crate(-10.8,0,4.5,0,0xd04a30);
+crate(-5.4,0,3.7,0,0x7aa030);
+
+stall(4,5.2, -1, [0xa8306a,0xd8d2c4], '面', [2.5,0.5,1.6], 'BBQ', [2.6,1.0,0.2]);
+wokStation(3.2,5.2,-1); wokStation(5.0,5.2,-1);
+M(6.4,0.9,4.0, 0.7,1.8,0.7, 0xc9b23a);
+for(let i=0;i<5;i++) bowl(2.4+i*0.5,1.72,4.7);
+
+stall(16,5.2, -1, [0x28a8a0,0x2c303c], '市', [0.5,1.5,2.6], '24H', [2.4,0.5,0.4]);
+M(17.6,1.3,5.6, 1.4,2.6,0.9, 0x30343f);
+G(17.6,1.3,5.12, 1.1,2.2,0.06, [0.35,1.1,1.5]);
+for(let i=0;i<5;i++) bottle(14.4+i*0.5,1.72,4.9, pick([0x3f7a4a,0x7a3f3f,0x8a7a3a]));
+crate(18.9,0,3.6,0,0); crate(18.9,0.5,3.6,0,0);
+
+table(-2,2.2); stool(-3.2,2.2,0xc03028); stool(-0.8,2.2,0x2860a8);
+bowl(-2.4,1.1,2.2); bowl(-1.6,1.1,2.2);
+table(13,2.6); stool(13,1.5,0xc9a23a); bowl(13,1.1,2.6);
+emitter(-2,1.3,2.2, 10, 0.2, 0x9fb2c4, 0.6, 2.0, 0.24);
+stool(-13.4,-3.1,0x2860a8); stool(10.6,-3.0,0xc03028); stool(3.2,2.9,0x3a8a4a);
+M(-17.5,0.55,-3.2, 0.9,1.1,0.9, 0x2c4a3a);
+M(-17.5,1.15,-3.2, 0.95,0.12,0.95, 0x1c3428);
+M(0.6,0.35,-3.4, 0.7,0.7,0.5, 0x8a6a3a);
+M(0.6,0.72,-3.4, 0.6,0.06,0.4, 0x6a4a28);
+M(7.5,0.3,1.8, 0.4,0.6,0.4, 0xd06020);
+M(7.5,0.62,1.8, 0.24,0.1,0.24, 0xe8e2d4);
+M(-5.6,0.75,-3.6, 0.7,1.5,0.12, 0x1c1f28);
+G(-5.6,1.05,-3.53, 0.5,0.6,0.04, [1.6,1.1,0.5]);
+emitter(5,0.15,-2, 14, 0.35, 0x8fa3b8, 0.55, 3.0, 0.45);
+
+const gateX=-21.5;
+for(const s of [-1,1]){
+  M(gateX,3.5,s*6.5, 0.9,7,0.9, 0xa03028);
+  M(gateX,0.35,s*6.5, 1.3,0.7,1.3, 0x3a3f4c);
+}
+M(gateX,6.3,0, 0.8,0.7,14.2, 0xa03028);
+M(gateX,7.1,0, 0.7,0.5,13.4, 0x8a2820);
+M(gateX,7.6,0, 1.5,0.35,15.0, 0x1c3428);
+M(gateX,7.95,0, 1.1,0.3,13.8, 0x244030);
+M(gateX,8.25,0, 0.7,0.28,12.2, 0x1c3428);
+G(gateX,7.38,0, 0.9,0.08,14.6, [2.2,1.0,0.25]);
+for(const s of [-1,1]) G(gateX,5.9,s*5.6, 0.5,0.6,0.5, [2.0,0.4,0.12]);
+panel(GLYPHS['市'], gateX+0.45,6.65,0, [0,0,-1],[0,1,0],[1,0,0], [2.4,1.7,0.4], 0.3);
+
+const poleXs=[-18,-6,6,18];
+for(const px of poleXs) for(const s of [-1,1]){
+  M(px,4.0,s*7.3, 0.22,8,0.22, 0x23262e);
+  M(px,7.9,s*7.3, 0.6,0.12,0.12, 0x23262e);
+  M(px,0.3,s*7.3, 0.4,0.6,0.4, 0x1a1d24);
+}
+function wire(p0,p1,sag,segments=12,color=0x0a0c10,thick=0.05){
+  const pts=[];
+  for(let i=0;i<=segments;i++){
+    const t=i/segments;
+    pts.push(new THREE.Vector3(
+      p0[0]+(p1[0]-p0[0])*t,
+      p0[1]+(p1[1]-p0[1])*t - sag*4*t*(1-t),
+      p0[2]+(p1[2]-p0[2])*t));
+  }
+  const up=new THREE.Vector3(0,1,0);
+  for(let i=0;i<segments;i++){
+    const a=pts[i], b=pts[i+1], d=new THREE.Vector3().subVectors(b,a);
+    const len=d.length(), mid=new THREE.Vector3().addVectors(a,b).multiplyScalar(0.5);
+    const q=new THREE.Quaternion().setFromUnitVectors(up,d.normalize());
+    push(matteList,mid.x,mid.y,mid.z,thick,len,thick,color,q);
+  }
+  return pts;
+}
+for(const s of [-1,1]) for(let i=0;i<poleXs.length-1;i++)
+  wire([poleXs[i],7.9,s*7.3],[poleXs[i+1],7.9,s*7.3],0.7,14);
+for(const px of poleXs) wire([px,7.9,-7.3],[px,7.9,7.3],0.9,14);
+wire([-19,9.5,-9.5],[19,10.5,-9.5],1.2,18);
+wire([-19,10.5,9.5],[19,9.5,9.5],1.2,18);
+
+const actors=[];
+const dynParts=[];
+function dpart(parent,x,y,z,sx,sy,sz,c,glow=false){
+  const n=new THREE.Object3D(); n.position.set(x,y,z); parent.add(n);
+  dynParts.push({node:n,sx,sy,sz,c:col(c),glow});
+  return n;
+}
+function pivot(parent,x,y,z){ const n=new THREE.Object3D(); n.position.set(x,y,z); parent.add(n); return n; }
+
+const lanternPivots=[];
+for(const lx of [-12,0,12]){
+  const pts=wire([lx,7.4,-7.3],[lx,7.4,7.3],1.3,16,0x0a0c10,0.04);
+  for(let i=2;i<=14;i+=3){
+    const p=pts[i];
+    const pv=pivot(scene,p.x,p.y,p.z);
+    dpart(pv,0,-0.12,0, 0.04,0.24,0.04, 0x1a1d24);
+    dpart(pv,0,-0.3,0, 0.34,0.1,0.34, 0x8a2018);
+    dpart(pv,0,-0.68,0, 0.72,0.72,0.72, [2.1,0.42,0.12], true);
+    dpart(pv,0,-1.08,0, 0.34,0.1,0.34, 0x8a2018);
+    dpart(pv,0,-1.28,0, 0.08,0.3,0.08, [1.8,0.5,0.15], true);
+    lanternPivots.push({pv,phase:rnd(0,6)});
+  }
+}
+actors.push({update(t){
+  for(const l of lanternPivots){
+    l.pv.rotation.z=0.085*Math.sin(t*1.15+l.phase);
+    l.pv.rotation.x=0.06*Math.sin(t*0.9+l.phase*1.7);
+  }
+}});
+for(const s of [-1,1]) for(let i=0;i<poleXs.length-1;i++){
+  for(let k=1;k<6;k++){
+    const t=k/6, x=poleXs[i]+(poleXs[i+1]-poleXs[i])*t;
+    G(x,7.9-0.7*4*t*(1-t)-0.15,s*7.3, 0.12,0.16,0.12, [1.8,1.2,0.55]);
+  }
+}
+
+const SKINS=[0xe8b48a,0xd9a070,0xc98a60,0xf0c49a];
+const SHIRTS=[0xc03028,0x2860a8,0x3a8a4a,0xc9a23a,0xd8d2c4,0x7a4a9a,0x28a8a0,0xd06020];
+const PANTS=[0x23262e,0x2c303c,0x3a3040,0x1c2430];
+const HAIRS=[0x14100c,0x241a10,0x0c0c10,0x3a2a1a];
+function makePerson(x,z,yaw,type,phase=0,scale=1,parent=scene){
+  const root=new THREE.Group(); root.position.set(x,0,z); root.rotation.y=yaw; root.scale.setScalar(scale); parent.add(root);
+  const skin=pick(SKINS), shirt=pick(SHIRTS), pants=pick(PANTS), hair=pick(HAIRS);
+  const bob=pivot(root,0,0,0);
+  const legL=pivot(bob,-0.17,1.02,0), legR=pivot(bob,0.17,1.02,0);
+  dpart(legL,0,-0.5,0, 0.26,1.0,0.3, pants);
+  dpart(legR,0,-0.5,0, 0.26,1.0,0.3, pants);
+  dpart(legL,0,-1.0,0.05, 0.27,0.12,0.4, 0x14161c);
+  dpart(legR,0,-1.0,0.05, 0.27,0.12,0.4, 0x14161c);
+  dpart(bob,0,1.6,0, 0.78,1.05,0.44, shirt);
+  const armL=pivot(bob,-0.5,2.05,0), armR=pivot(bob,0.5,2.05,0);
+  dpart(armL,0,-0.42,0, 0.2,0.85,0.24, shirt);
+  dpart(armR,0,-0.42,0, 0.2,0.85,0.24, shirt);
+  dpart(armL,0,-0.9,0, 0.18,0.18,0.2, skin);
+  const handR=dpart(armR,0,-0.9,0, 0.18,0.18,0.2, skin);
+  const head=pivot(bob,0,2.32,0);
+  dpart(head,0,0.32,0, 0.6,0.6,0.6, skin);
+  dpart(head,0,0.62,0, 0.64,0.16,0.64, hair);
+  dpart(head,0,0.4,-0.3, 0.62,0.4,0.06, hair);
+  dpart(head,-0.13,0.36,0.31, 0.07,0.07,0.03, 0x101014);
+  dpart(head,0.13,0.36,0.31, 0.07,0.07,0.03, 0x101014);
+  if(type==='vendor') dpart(bob,0,1.45,0.25, 0.6,0.85,0.06, 0xe8e2d4);
+  const P={root,bob,legL,legR,armL,armR,head,handR,yaw,phase,type};
+  actors.push({update(t,dt){ personAnim(P,t,dt); }});
+  return P;
+}
+function personAnim(P,t,dt){
+  const ph=P.phase, bob=P.bob;
+  bob.position.y=0;
+  P.legL.rotation.x=0; P.legR.rotation.x=0;
+  P.armL.rotation.set(0,0,0.06); P.armR.rotation.set(0,0,-0.06);
+  P.head.rotation.set(0,0,0);
+  switch(P.type){
+    case 'vendor':
+      bob.position.y=0.02*Math.sin(t*2+ph);
+      P.armR.rotation.x=-1.15+0.35*Math.sin(t*4+ph);
+      P.armR.rotation.z=-0.3+0.25*Math.cos(t*4+ph);
+      P.armL.rotation.x=-0.55;
+      P.head.rotation.y=0.25*Math.sin(t*0.7+ph);
+      P.root.rotation.x=0.05;
+      break;
+    case 'haggle':
+      bob.position.y=0.03*Math.sin(t*2.6+ph);
+      P.armR.rotation.x=-0.9+0.55*Math.sin(t*2.6+ph);
+      P.armR.rotation.z=-0.25+0.2*Math.sin(t*1.9+ph);
+      P.armL.rotation.x=-0.3+0.2*Math.sin(t*2.2+ph+1);
+      P.head.rotation.y=0.2*Math.sin(t*1.1+ph);
+      P.head.rotation.x=0.1*Math.sin(t*2.4+ph);
+      break;
+    case 'listen':
+      bob.position.y=0.02*Math.sin(t*1.8+ph);
+      P.armL.rotation.x=-0.5; P.armR.rotation.x=-0.5;
+      P.head.rotation.x=0.14*Math.max(0,Math.sin(t*2.1+ph));
+      break;
+    case 'eat':
+      bob.position.y=0.02*Math.sin(t*1.6+ph);
+      P.armR.rotation.x=-1.9+0.55*Math.max(0,Math.sin(t*1.3+ph));
+      P.armL.rotation.x=-0.7;
+      P.head.rotation.x=0.12+0.08*Math.sin(t*1.3+ph);
+      break;
+    case 'point':
+      bob.position.y=0.02*Math.sin(t*2+ph);
+      P.armR.rotation.x=-1.35+0.18*Math.sin(t*2+ph);
+      P.head.rotation.y=0.15*Math.sin(t*0.9+ph);
+      break;
+    case 'smoke':
+      bob.position.y=0.02*Math.sin(t*1.4+ph);
+      P.armR.rotation.x=-1.7+0.4*Math.max(0,Math.sin(t*0.6+ph));
+      P.armL.rotation.x=-0.2;
+      P.head.rotation.x=0.06*Math.sin(t*0.6+ph);
+      break;
+    case 'walk': case 'kid': {
+      const sp=P.type==='kid'?2.3:1.15, span=P.type==='kid'?11:17;
+      const cyc=(t*sp+ph*3)%(2*span);
+      const dir=cyc<span?1:-1;
+      P.root.position.x=dir>0?-span+cyc:span-(cyc-span);
+      const target=dir>0?Math.PI/2:-Math.PI/2;
+      let d=target-P.yaw; while(d>Math.PI)d-=2*Math.PI; while(d<-Math.PI)d+=2*Math.PI;
+      P.yaw+=d*Math.min(1,dt*5); P.root.rotation.y=P.yaw;
+      const w=t*(P.type==='kid'?11:7)+ph;
+      P.legL.rotation.x=0.6*Math.sin(w); P.legR.rotation.x=-0.6*Math.sin(w);
+      P.armL.rotation.x=-0.5*Math.sin(w); P.armR.rotation.x=0.5*Math.sin(w);
+      bob.position.y=0.05*Math.abs(Math.sin(w));
+      break;
+    }
+    case 'ride':
+      P.legL.rotation.x=-1.25; P.legR.rotation.x=-1.25;
+      P.armL.rotation.x=-1.1; P.armR.rotation.x=-1.1;
+      bob.position.y=0.01*Math.sin(t*9);
+      break;
+  }
+}
+
+makePerson(-14,-6.1,0,'vendor',0.4);
+makePerson(-2,-6.1,0,'vendor',1.7);
+makePerson(10,-6.1,0,'vendor',2.9);
+makePerson(-8,6.1,Math.PI,'haggle',0.8);
+makePerson(4,6.1,Math.PI,'vendor',3.6);
+makePerson(16,6.1,Math.PI,'vendor',5.1);
+makePerson(-13.2,-3.0,Math.PI,'point',1.1);
+makePerson(10.8,-2.9,Math.PI,'listen',2.2);
+makePerson(3.4,3.0,0,'point',3.3);
+makePerson(-8.6,3.0,0,'haggle',1.9);
+makePerson(-7.0,2.9,-0.5,'listen',4.4);
+makePerson(-3.2,2.2,Math.PI/2,'eat',0.2);
+makePerson(-0.8,2.2,-Math.PI/2,'eat',2.4);
+makePerson(13,1.5,0,'eat',1.4);
+makePerson(0,0.6,Math.PI/2,'walk',0);
+const kid=makePerson(0,-1.2,Math.PI/2,'kid',2.0,0.62);
+makePerson(-6,-6.9,0.4,'smoke',1.0);
+const balloonPv=pivot(kid.root,0.35,3.6,0);
+dpart(balloonPv,0,-0.7,0, 0.03,1.4,0.03, 0x1a1d24);
+dpart(balloonPv,0,0.15,0, 0.55,0.62,0.55, [1.9,0.35,0.25], true);
+actors.push({update(t){ balloonPv.rotation.z=0.15*Math.sin(t*1.7); balloonPv.rotation.x=0.1*Math.sin(t*1.3+1); }});
+
+function scooterNodes(parent){
+  const g=new THREE.Group(); parent.add(g);
+  dpart(g,0,0.38,0, 1.7,0.16,0.55, 0x2c303c);
+  dpart(g,-0.55,0.72,0, 1.05,0.55,0.6, pick([0xc03028,0x2860a8,0x28a8a0,0xc9a23a]));
+  dpart(g,-0.5,1.05,0, 0.85,0.18,0.52, 0x14161c);
+  dpart(g,0.62,0.85,0, 0.2,1.0,0.2, 0x2c303c).rotation.z=-0.22;
+  dpart(g,0.82,1.32,0, 0.16,0.14,0.95, 0x23262e);
+  dpart(g,0.82,1.42,0.42, 0.1,0.16,0.06, 0x14161c);
+  dpart(g,0.82,1.42,-0.42, 0.1,0.16,0.06, 0x14161c);
+  const wf=pivot(g,0.85,0.33,0), wr=pivot(g,-0.75,0.33,0);
+  dpart(wf,0,0,0, 0.56,0.56,0.22, 0x0c0e12);
+  dpart(wr,0,0,0, 0.56,0.56,0.22, 0x0c0e12);
+  dpart(wf,0,0,0, 0.2,0.2,0.24, 0x6a7280);
+  dpart(wr,0,0,0, 0.2,0.2,0.24, 0x6a7280);
+  dpart(g,0.95,1.05,0, 0.12,0.2,0.3, [3.0,2.4,1.4], true);
+  dpart(g,-1.08,0.75,0, 0.08,0.14,0.26, [2.4,0.25,0.15], true);
+  dpart(g,-0.9,0.55,0.28, 0.5,0.1,0.1, 0x6a7280);
+  return {g,wf,wr};
+}
+function parkedScooter(x,z,yaw){
+  const root=new THREE.Group(); root.position.set(x,0.18,z); root.rotation.y=yaw; scene.add(root);
+  scooterNodes(root);
+}
+parkedScooter(-18,-8,0.4);
+parkedScooter(19,8,2.8);
+const scoot=scooterNodes(scene);
+scoot.g.position.set(0,0,3.6);
+const rider=makePerson(0,0,0,'ride',0,0.95,scoot.g);
+rider.root.position.set(-0.35,1.0,0);
+rider.root.rotation.y=Math.PI/2;
+actors.push({update(t,dt){
+  const x=18*Math.sin(t*0.16);
+  const v=Math.cos(t*0.16);
+  scoot.g.position.x=x;
+  const target=v>0?0:Math.PI;
+  let d=target-scoot.g.rotation.y; while(d>Math.PI)d-=2*Math.PI; while(d<-Math.PI)d+=2*Math.PI;
+  scoot.g.rotation.y+=d*Math.min(1,dt*2.2);
+  scoot.wf.rotation.z-=v*2.9*dt/0.33;
+  scoot.wr.rotation.z-=v*2.9*dt/0.33;
+  scoot.g.position.y=0.01*Math.sin(t*13);
+}});
+
+const fireGlows=[];
+for(const [fx,fz] of [[-3.2,-5.2],[-0.8,-5.2],[3.2,5.2],[5.0,5.2]]){
+  const n=dpart(scene,fx,1.9,fz, 0.9,0.14,0.5, [2.4,0.8,0.15], true);
+  fireGlows.push({n,phase:rnd(0,6)});
+}
+const smokerEmber=dpart(scene,-5.85,2.2,-6.75, 0.06,0.06,0.06, [2.5,0.7,0.1], true);
+emitter(-5.85,2.6,-6.7, 6, 0.08, 0x8fa3b8, 0.5, 2.4, 0.2);
+
+let dynMatteCount=0, dynGlowCount=0;
+for(const p of dynParts){ p.idx = p.glow? dynGlowCount++ : dynMatteCount++; }
+const boxGeo=new THREE.BoxGeometry(1,1,1);
+const matteMat=new THREE.MeshLambertMaterial({color:0xffffff});
+const glowMat=new THREE.MeshBasicMaterial({color:0xffffff, toneMapped:false});
+function buildStatic(list,mat){
+  const mesh=new THREE.InstancedMesh(boxGeo,mat,list.length);
+  const m=new THREE.Matrix4();
+  list.forEach((b,i)=>{ m.compose(b.p,b.q,b.s); mesh.setMatrixAt(i,m); mesh.setColorAt(i,b.c); });
+  mesh.instanceMatrix.needsUpdate=true;
+  if(mesh.instanceColor) mesh.instanceColor.needsUpdate=true;
+  mesh.frustumCulled=false;
+  scene.add(mesh);
+  return mesh;
+}
+const staticMatte=buildStatic(matteList,matteMat);
+const staticGlow=buildStatic(glowList,glowMat);
+const dynMatte=new THREE.InstancedMesh(boxGeo,matteMat,dynMatteCount);
+const dynGlow=new THREE.InstancedMesh(boxGeo,glowMat,dynGlowCount);
+for(const mesh of [dynMatte,dynGlow]){
+  mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  mesh.frustumCulled=false;
+  scene.add(mesh);
+}
+dynParts.forEach(p=>{ (p.glow?dynGlow:dynMatte).setColorAt(p.idx,p.c); });
+dynMatte.instanceColor.needsUpdate=true;
+dynGlow.instanceColor.needsUpdate=true;
+
+const steamCount=emitters.reduce((s,e)=>s+e.n,0);
+const steamMat=new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0.5,depthWrite:false});
+const steamMesh=new THREE.InstancedMesh(boxGeo,steamMat,steamCount);
+steamMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+steamMesh.frustumCulled=false;
+scene.add(steamMesh);
+const steamParts=[];
+{
+  let i=0;
+  for(const e of emitters) for(let k=0;k<e.n;k++){
+    steamParts.push({e,age:rnd(0,e.life),life:e.life*rnd(0.8,1.2),seed:rnd(0,10)});
+    steamMesh.setColorAt(i,col(e.color));
+    i++;
+  }
+  steamMesh.instanceColor.needsUpdate=true;
+}
+const dripCount=14;
+const dripMat=new THREE.MeshBasicMaterial({color:0x7a90b0,transparent:true,opacity:0.75});
+const dripMesh=new THREE.InstancedMesh(boxGeo,dripMat,dripCount);
+dripMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+dripMesh.frustumCulled=false;
+scene.add(dripMesh);
+const drips=[];
+for(let i=0;i<dripCount;i++) drips.push({x:rnd(-20,20),z:pick([-3.6,3.6,-6.8,6.8]),y:rnd(0,4.2),delay:rnd(0,4)});
+
+scene.add(new THREE.HemisphereLight(0x33405e,0x0b0d14,0.7));
+const moon=new THREE.DirectionalLight(0x9db4ff,0.35);
+moon.position.set(-20,30,-12);
+scene.add(moon);
+for(const [lx,lz,c,it] of [
+  [-14,-4.5,0xffa050,21],[-2,-4.5,0xffa050,21],[10,-4.5,0xffb060,18],
+  [-8,4.5,0xffa050,18],[4,4.5,0xffa050,18],[16,4.5,0xffb060,18],
+  [0,6.5,0xff7040,13],[-6,2,0xff4080,9],[12,0,0x40a0ff,9]
+]){
+  const pl=new THREE.PointLight(c,it,13,2);
+  pl.position.set(lx,3.6,lz);
+  scene.add(pl);
+}
+
+const controls=new OrbitControls(camera,renderer.domElement);
+controls.enableDamping=true; controls.dampingFactor=0.08;
+controls.minDistance=3; controls.maxDistance=70;
+controls.maxPolarAngle=1.52;
+controls.target.set(0,2.6,0);
+controls.enabled=false;
+
+const LOOP=30;
+const orbitPos=new THREE.Vector3(), orbitTarget=new THREE.Vector3();
+function orbitState(t){
+  const a=t/LOOP*Math.PI*2;
+  orbitPos.set(Math.cos(a)*23, 10+2.5*Math.sin(2*a+1.1)+0.8*Math.sin(3*a+0.4), Math.sin(a)*4.5);
+  orbitTarget.set(1.8*Math.sin(a+0.6), 2.2+0.5*Math.sin(2*a+2.0), 0.9*Math.cos(a+0.3));
+}
+let mode='auto', blendT=0;
+const fromPos=new THREE.Vector3(), fromQuat=new THREE.Quaternion();
+addEventListener('keydown',e=>{
+  if(e.code!=='KeyC'||e.repeat) return;
+  if(mode==='free'){
+    mode='blend'; blendT=0;
+    fromPos.copy(camera.position); fromQuat.copy(camera.quaternion);
+    controls.enabled=false;
+  } else if(mode==='auto'){
+    mode='free';
+    controls.target.copy(orbitTarget);
+    controls.enabled=true;
+    controls.update();
+  }
+});
+
+const _m=new THREE.Matrix4(), _s=new THREE.Matrix4();
+const _v=new THREE.Vector3(), _sv=new THREE.Vector3(), _q=new THREE.Quaternion(), _e=new THREE.Euler();
+const _m4=new THREE.Matrix4();
+function writeDyn(){
+  for(const p of dynParts){
+    _s.makeScale(p.sx,p.sy,p.sz);
+    _m.multiplyMatrices(p.node.matrixWorld,_s);
+    (p.glow?dynGlow:dynMatte).setMatrixAt(p.idx,_m);
+  }
+  dynMatte.instanceMatrix.needsUpdate=true;
+  dynGlow.instanceMatrix.needsUpdate=true;
+}
+function updateSteam(t,dt){
+  let i=0;
+  for(const p of steamParts){
+    p.age+=dt;
+    if(p.age>p.life){ p.age=0; p.life=p.e.life*rnd(0.8,1.2); p.seed=rnd(0,10); }
+    const k=p.age/p.life, e=p.e;
+    const x=e.x+Math.sin(p.seed*7)*e.spread + p.age*0.28 + Math.sin(t*0.8+p.seed)*0.18*k;
+    const z=e.z+Math.cos(p.seed*5)*e.spread + Math.sin(t*0.5+p.seed*2)*0.12*k;
+    const y=e.y + e.vel*p.age*(1+0.2*Math.sin(p.seed));
+    let sc=e.size*(0.4+1.4*k);
+    if(k>0.65) sc*=1-(k-0.65)/0.35;
+    _v.set(x,y,z); _sv.set(sc,sc,sc); _e.set(0,p.seed+t*0.4,0); _q.setFromEuler(_e);
+    _m.compose(_v,_q,_sv);
+    steamMesh.setMatrixAt(i,_m);
+    i++;
+  }
+  steamMesh.instanceMatrix.needsUpdate=true;
+}
+function updateDrips(t,dt){
+  let i=0;
+  for(const d of drips){
+    if(d.delay>0){ d.delay-=dt; _m.makeScale(0.001,0.001,0.001); }
+    else {
+      d.y-=9*dt;
+      if(d.y<0.05){ d.y=4.2; d.x=rnd(-20,20); d.delay=rnd(0.5,5); }
+      _v.set(d.x,d.y,d.z); _sv.set(0.05,0.22,0.05);
+      _m.compose(_v,IDQ,_sv);
+    }
+    dripMesh.setMatrixAt(i,_m);
+    i++;
+  }
+  dripMesh.instanceMatrix.needsUpdate=true;
+}
+const flickerBase=col([0.4,2.4,1.7]);
+const _c=new THREE.Color();
+function updateFlicker(t){
+  const n=Math.sin(t*17)*Math.sin(t*3.7)+Math.sin(t*29)*0.3;
+  const f=n>0.95?0.12:(0.82+0.18*Math.sin(t*31));
+  _c.copy(flickerBase).multiplyScalar(f);
+  for(const idx of flickerIdx) staticGlow.setColorAt(idx,_c);
+  staticGlow.instanceColor.needsUpdate=true;
+  for(const fg of fireGlows){
+    const k=1.7+0.9*Math.abs(Math.sin(t*6+fg.phase))+0.3*Math.sin(t*23+fg.phase*3);
+    _c.setRGB(k,k*0.34,k*0.06);
+    dynGlow.setColorAt(fg.idx,_c);
+  }
+  const ek=1.5+1.5*Math.max(0,Math.sin(t*0.6+1));
+  dynGlow.setColorAt(smokerEmber.userData.idx,_c.setRGB(ek,ek*0.3,ek*0.05));
+  dynGlow.instanceColor.needsUpdate=true;
+}
+for(const fg of fireGlows){ const p=dynParts.find(q=>q.node===fg.n); fg.idx=p.idx; }
+{ const p=dynParts.find(q=>q.node===smokerEmber); smokerEmber.userData.idx=p.idx; }
+
+const clock=new THREE.Clock();
+let simT=0, firstFrame=true;
+function animate(){
+  requestAnimationFrame(animate);
+  const dt=Math.min(clock.getDelta(),0.05);
+  simT+=dt;
+  for(const a of actors) a.update(simT,dt);
+  scene.updateMatrixWorld(true);
+  writeDyn();
+  updateSteam(simT,dt);
+  updateDrips(simT,dt);
+  updateFlicker(simT);
+  orbitState(simT);
+  if(mode==='auto'){
+    camera.position.copy(orbitPos);
+    camera.lookAt(orbitTarget);
+  } else if(mode==='free'){
+    controls.update();
+  } else {
+    blendT+=dt/1.4;
+    const k=blendT>=1?1:blendT*blendT*(3-2*blendT);
+    _m4.lookAt(orbitPos,orbitTarget,camera.up);
+    _q.setFromRotationMatrix(_m4);
+    camera.position.lerpVectors(fromPos,orbitPos,k);
+    camera.quaternion.slerpQuaternions(fromQuat,_q,k);
+    if(blendT>=1) mode='auto';
+  }
+  composer.render();
+  if(firstFrame){ firstFrame=false; renderer.domElement.style.opacity=1; }
+}
+addEventListener('resize',()=>{
+  camera.aspect=innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+  composer.setSize(innerWidth,innerHeight);
+});
+orbitState(0);
+camera.position.copy(orbitPos);
+camera.lookAt(orbitTarget);
+animate();
+</script>
+</body>
+</html>

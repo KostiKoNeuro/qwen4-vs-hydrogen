@@ -1,0 +1,2739 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Shenzhen Night Market — Voxel Diorama</title>
+  <link rel="icon" href="data:," />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #060912;
+      user-select: none;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+  </style>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+// ============================================================================
+// 1. CONSTANTS, DETERMINISTIC RNG & VOXEL GLYPH ATLAS (NO TEXTURES)
+// ============================================================================
+const LOOP_DURATION = 30.0;
+const TAU = Math.PI * 2;
+
+function hash3(x, y, z) {
+  let n = Math.sin(x * 127.1 + y * 311.7 + z * 74.7) * 43758.5453123;
+  return n - Math.floor(n);
+}
+
+function createRng(seed = 1337) {
+  let s = seed >>> 0;
+  return () => {
+    s = (s * 1664525 + 1013904223) >>> 0;
+    return s / 4294967296;
+  };
+}
+
+function jitterColor(hex, amt = 0.04, x = 0, y = 0, z = 0) {
+  const c = new THREE.Color(hex);
+  const h = hash3(Math.round(x * 20), Math.round(y * 20), Math.round(z * 20));
+  const delta = (h - 0.5) * 2.0 * amt;
+  c.offsetHSL(0, 0, delta);
+  return c;
+}
+
+// 9x9 crisp voxel bitmaps for authentic Shenzhen Chinese neon characters (no textures!)
+const GLYPHS = {
+  '深': [
+    '#...#....',
+    '.#..#####',
+    '#...#...#',
+    '..#.##.##',
+    '.#.#..#..',
+    '#....###.',
+    '.#..#.#.#',
+    '.#.#..#..',
+    '..#...#..'
+  ],
+  '圳': [
+    '.#...#.#.',
+    '.#...#.#.',
+    '###..#.#.',
+    '.#...#.#.',
+    '.#..#..#.',
+    '.#..#..#.',
+    '.##.#..#.',
+    '#..#...#.',
+    '.......#.'
+  ],
+  '夜': [
+    '....#....',
+    '.#######.',
+    '..#...#..',
+    '.#..###..',
+    '#..#..#..',
+    '.#.####..',
+    '.#..#.#..',
+    '.#.#..#..',
+    '.##....#.'
+  ],
+  '市': [
+    '....#....',
+    '.#######.',
+    '....#....',
+    '..#####..',
+    '..#.#.#..',
+    '..#.#.#..',
+    '..#.#.#..',
+    '....###..',
+    '....#....'
+  ],
+  '烧': [
+    '.#...#...',
+    '#.#..####',
+    '.#.#...#.',
+    '.#.#.###.',
+    '##.#.#.#.',
+    '.#....#..',
+    '#.#..#.#.',
+    '#.#.#..#.',
+    '....#..##'
+  ],
+  '烤': [
+    '.#...#...',
+    '#.#.####.',
+    '.#.#.#...',
+    '.#..####.',
+    '##....#..',
+    '.#..####.',
+    '#.#.#..#.',
+    '#.#.#..#.',
+    '.....###.'
+  ],
+  '生': [
+    '....#....',
+    '..#.#....',
+    '..######.',
+    '.#..#....',
+    '....#....',
+    '..#####..',
+    '....#....',
+    '....#....',
+    '.#######.'
+  ],
+  '蚝': [
+    '###..#...',
+    '#.#.####.',
+    '###..#...',
+    '.#..####.',
+    '.#...#...',
+    '###.####.',
+    '#.#..#..#',
+    '.....#..#',
+    '......###'
+  ],
+  '面': [
+    '.#######.',
+    '....#....',
+    '.#######.',
+    '.#.#.#.#.',
+    '.#.###.#.',
+    '.#.#.#.#.',
+    '.#.###.#.',
+    '.#.....#.',
+    '.#######.'
+  ],
+  '茶': [
+    '..#...#..',
+    '.#######.',
+    '..#...#..',
+    '....#....',
+    '..#...#..',
+    '.#.###.#.',
+    '#...#...#',
+    '..#.#.#..',
+    '.#..#..#.'
+  ],
+  '鲜': [
+    '..#..#...',
+    '.###.###.',
+    '#.#.#.#.#',
+    '####.###.',
+    '#.#.#.#.#',
+    '####.###.',
+    '..#...#..',
+    '.###..#..',
+    '#...#.#..'
+  ],
+  '海': [
+    '#...#....',
+    '.#..#####',
+    '#..#.....',
+    '..#.####.',
+    '.#..#..#.',
+    '#..######',
+    '.#..#..#.',
+    '.#..####.',
+    '......#..'
+  ],
+  '酒': [
+    '#..######',
+    '.#...#.#.',
+    '#..######',
+    '...#.#.#.',
+    '.#.#.#.#.',
+    '#..#.##.#',
+    '.#.#....#',
+    '.#.######',
+    '...######'
+  ],
+  '牛': [
+    '..#..#...',
+    '.#...#...',
+    '.#######.',
+    '.....#...',
+    '.....#...',
+    '#########',
+    '.....#...',
+    '.....#...',
+    '.....#...'
+  ],
+  '肉': [
+    '.#######.',
+    '.#..#..#.',
+    '.#.###.#.',
+    '.##.#.##.',
+    '.#..#..#.',
+    '.#.###.#.',
+    '.##.#.##.',
+    '.#.....#.',
+    '.#....##.'
+  ],
+  '粉': [
+    '#.#..#...',
+    '.#..#.#..',
+    '###.#..#.',
+    '.#..#..#.',
+    '###..###.',
+    '#.#.#..#.',
+    '.#..#..#.',
+    '.#.#...#.',
+    '...#..##.'
+  ],
+  '2': [
+    '.#####.',
+    '#.....#',
+    '......#',
+    '.....#.',
+    '..###..',
+    '.#.....',
+    '#......',
+    '#......',
+    '#######'
+  ],
+  '4': [
+    '.....#.',
+    '....##.',
+    '...#.#.',
+    '..#..#.',
+    '.#...#.',
+    '#######',
+    '.....#.',
+    '.....#.',
+    '.....#.'
+  ],
+  'H': [
+    '#.....#',
+    '#.....#',
+    '#.....#',
+    '#.....#',
+    '#######',
+    '#.....#',
+    '#.....#',
+    '#.....#',
+    '#.....#'
+  ],
+  'icon_bowl': [
+    '..#.#.#..',
+    '.#.#.#...',
+    '..#.#.#..',
+    '.........',
+    '.#######.',
+    '.#######.',
+    '..#####..',
+    '...###...',
+    '..#####..'
+  ],
+  'icon_beer': [
+    '..####...',
+    '.######..',
+    '.######..',
+    '.#....###',
+    '.#....#.#',
+    '.#....###',
+    '.#....#..',
+    '.######..',
+    '.######..'
+  ],
+  'icon_lemon': [
+    '....#....',
+    '..#####..',
+    '.#..#..#.',
+    '#...#...#',
+    '#########',
+    '#...#...#',
+    '.#..#..#.',
+    '..#####..',
+    '.........'
+  ]
+};
+
+// ============================================================================
+// 2. RENDERER, SCENE, CAMERAS & POST-PROCESSING
+// ============================================================================
+const renderer = new THREE.WebGLRenderer({
+  antialias: true,
+  powerPreference: 'high-performance'
+});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.06;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color('#0c1324');
+scene.fog = new THREE.FogExp2('#0c1324', 0.0105);
+
+const camera = new THREE.PerspectiveCamera(44, window.innerWidth / window.innerHeight, 0.15, 220);
+
+// Mirror camera for real-time wet asphalt planar reflections (zero external textures!)
+const reflectCamera = new THREE.PerspectiveCamera(44, window.innerWidth / window.innerHeight, 0.15, 220);
+const reflectMatrix = new THREE.Matrix4();
+const reflectWidth = Math.max(256, Math.floor(window.innerWidth * 0.5));
+const reflectHeight = Math.max(256, Math.floor(window.innerHeight * 0.5));
+const reflectionRT = new THREE.WebGLRenderTarget(reflectWidth, reflectHeight, {
+  type: THREE.HalfFloatType,
+  minFilter: THREE.LinearFilter,
+  magFilter: THREE.LinearFilter,
+  depthBuffer: true
+});
+
+// Post-processing with selective HDR bloom
+const composerTarget = new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight, {
+  type: THREE.HalfFloatType,
+  samples: 4
+});
+const composer = new EffectComposer(renderer, composerTarget);
+const renderPass = new RenderPass(scene, camera);
+composer.addPass(renderPass);
+
+const bloomPass = new UnrealBloomPass(
+  new THREE.Vector2(window.innerWidth, window.innerHeight),
+  0.46, // strength: crisp neon halo without muddying voxels
+  0.52, // radius
+  0.88  // threshold: only HDR emissives & bright wet reflections bloom
+);
+composer.addPass(bloomPass);
+composer.addPass(new OutputPass());
+
+// ============================================================================
+// 3. VOXEL BATCH BUILDER & CUSTOM SHADERS (VOXEL BEVEL + WET REFLECTIONS)
+// ============================================================================
+const sharedBoxGeo = new THREE.BoxGeometry(1, 1, 1);
+
+class VoxelCollector {
+  constructor() {
+    this.items = [];
+  }
+  add(x, y, z, sx, sy, sz, color, extra = 0) {
+    this.items.push({ x, y, z, sx, sy, sz, color: new THREE.Color(color), extra });
+  }
+  addCube(x, y, z, s, color, extra = 0) {
+    this.add(x, y, z, s, s, s, color, extra);
+  }
+  // Fill an axis-aligned region strictly with discrete cubes of size `unit`
+  fillCubes(x0, y0, z0, nx, ny, nz, unit, colorOrFn, { shellOnly = false, jitter = 0.03, extra = 0 } = {}) {
+    for (let ix = 0; ix < nx; ix++) {
+      for (let iy = 0; iy < ny; iy++) {
+        for (let iz = 0; iz < nz; iz++) {
+          if (shellOnly && ix > 0 && ix < nx - 1 && iy > 0 && iy < ny - 1 && iz > 0 && iz < nz - 1) {
+            continue;
+          }
+          const cx = x0 + (ix + 0.5) * unit;
+          const cy = y0 + (iy + 0.5) * unit;
+          const cz = z0 + (iz + 0.5) * unit;
+          const baseCol = typeof colorOrFn === 'function' ? colorOrFn(ix, iy, iz, cx, cy, cz) : colorOrFn;
+          if (baseCol == null) continue;
+          const col = jitter > 0 ? jitterColor(baseCol, jitter, cx, cy, cz) : new THREE.Color(baseCol);
+          this.items.push({ x: cx, y: cy, z: cz, sx: unit, sy: unit, sz: unit, color: col, extra });
+        }
+      }
+    }
+  }
+  buildInstancedMesh(material, { castShadow = true, receiveShadow = true, extraAttrName = null } = {}) {
+    const count = this.items.length;
+    if (count === 0) return null;
+    const geo = sharedBoxGeo.clone();
+    if (extraAttrName) {
+      const arr = new Float32Array(count);
+      for (let i = 0; i < count; i++) arr[i] = this.items[i].extra;
+      geo.setAttribute(extraAttrName, new THREE.InstancedBufferAttribute(arr, 1));
+    }
+    const mesh = new THREE.InstancedMesh(geo, material, count);
+    mesh.castShadow = castShadow;
+    mesh.receiveShadow = receiveShadow;
+    const dummy = new THREE.Object3D();
+    for (let i = 0; i < count; i++) {
+      const it = this.items[i];
+      dummy.position.set(it.x, it.y, it.z);
+      dummy.scale.set(it.sx, it.sy, it.sz);
+      dummy.updateMatrix();
+      mesh.setMatrixAt(i, dummy.matrix);
+      mesh.setColorAt(i, it.color);
+    }
+    mesh.instanceMatrix.needsUpdate = true;
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    return mesh;
+  }
+}
+
+const matteCol = new VoxelCollector();
+const metalCol = new VoxelCollector();
+const emissiveCol = new VoxelCollector();
+const wetGroundCol = new VoxelCollector();
+const plinthCol = new VoxelCollector();
+
+// Subtle voxel bevel & crevice shader so every individual cube is tactile and readable
+function injectVoxelBevelShader(material, edgeDarkness = 0.10) {
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.uEdgeDark = { value: edgeDarkness };
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', `#include <common>
+varying vec3 vVoxelLocalPos;
+varying vec3 vVoxelLocalNormal;`)
+      .replace('#include <begin_vertex>', `#include <begin_vertex>
+vVoxelLocalPos = position;
+vVoxelLocalNormal = normal;`);
+
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', `#include <common>
+uniform float uEdgeDark;
+varying vec3 vVoxelLocalPos;
+varying vec3 vVoxelLocalNormal;`)
+      .replace('#include <color_fragment>', `#include <color_fragment>
+vec3 absN = abs(vVoxelLocalNormal);
+vec2 faceUV;
+if (absN.y > 0.5) faceUV = vVoxelLocalPos.xz;
+else if (absN.x > 0.5) faceUV = vVoxelLocalPos.zy;
+else faceUV = vVoxelLocalPos.xy;
+float edgeDist = min(0.5 - abs(faceUV.x), 0.5 - abs(faceUV.y));
+float fw = max(fwidth(faceUV.x), fwidth(faceUV.y));
+float edgeMask = 1.0 - smoothstep(0.02, max(0.055, fw * 1.35), edgeDist);
+float fadeFar = 1.0 - smoothstep(0.08, 0.28, fw);
+diffuseColor.rgb *= (1.0 - uEdgeDark * edgeMask * fadeFar);`);
+  };
+}
+
+const matteMat = new THREE.MeshStandardMaterial({ roughness: 0.78, metalness: 0.04 });
+injectVoxelBevelShader(matteMat, 0.11);
+
+const metalMat = new THREE.MeshStandardMaterial({ roughness: 0.30, metalness: 0.68 });
+injectVoxelBevelShader(metalMat, 0.08);
+
+const plinthMat = new THREE.MeshStandardMaterial({ roughness: 0.88, metalness: 0.05 });
+injectVoxelBevelShader(plinthMat, 0.14);
+
+const emissiveMat = new THREE.MeshBasicMaterial({ toneMapped: false });
+
+// Wet ground shader: real-time planar reflection + anisotropic wet streaks + animated puddle raindrop ripples
+const wetUniforms = {
+  uReflectTex: { value: reflectionRT.texture },
+  uReflectMatrix: { value: reflectMatrix },
+  uTime: { value: 0 },
+  uCamPos: { value: new THREE.Vector3() },
+  uReflectEnable: { value: 1.0 }
+};
+
+const wetGroundMat = new THREE.MeshStandardMaterial({
+  roughness: 0.16,
+  metalness: 0.22
+});
+
+wetGroundMat.onBeforeCompile = (shader) => {
+  shader.uniforms.uReflectTex = wetUniforms.uReflectTex;
+  shader.uniforms.uReflectMatrix = wetUniforms.uReflectMatrix;
+  shader.uniforms.uTime = wetUniforms.uTime;
+  shader.uniforms.uCamPos = wetUniforms.uCamPos;
+  shader.uniforms.uReflectEnable = wetUniforms.uReflectEnable;
+
+  shader.vertexShader = shader.vertexShader
+    .replace('#include <common>', `#include <common>
+attribute float aWetType;
+varying float vWetType;
+varying vec3 vWetWorldPos;
+varying vec3 vWetWorldNormal;
+varying vec3 vWetLocalPos;`)
+    .replace('#include <project_vertex>', `#include <project_vertex>
+vec4 wp = vec4(transformed, 1.0);
+#ifdef USE_INSTANCING
+wp = instanceMatrix * wp;
+#endif
+wp = modelMatrix * wp;
+vWetWorldPos = wp.xyz;
+vec3 wn = objectNormal;
+#ifdef USE_INSTANCING
+wn = mat3(instanceMatrix) * wn;
+#endif
+vWetWorldNormal = normalize(mat3(modelMatrix) * wn);
+vWetType = aWetType;
+vWetLocalPos = position;`);
+
+  shader.fragmentShader = shader.fragmentShader
+    .replace('#include <common>', `#include <common>
+uniform sampler2D uReflectTex;
+uniform mat4 uReflectMatrix;
+uniform float uTime;
+uniform vec3 uCamPos;
+uniform float uReflectEnable;
+varying float vWetType;
+varying vec3 vWetWorldPos;
+varying vec3 vWetWorldNormal;
+varying vec3 vWetLocalPos;
+
+float rippleRing(vec2 p, vec2 center, float tOffset, float period, out vec2 grad) {
+  float age = fract((uTime + tOffset) / period);
+  vec2 d = p - center;
+  float dist = length(d);
+  float radius = age * 1.45;
+  float ring = exp(-pow((dist - radius) * 14.0, 2.0)) * (1.0 - age);
+  float wave = sin((dist - radius) * 36.0) * ring;
+  grad = dist > 0.001 ? (d / dist) * wave : vec2(0.0);
+  return max(0.0, ring);
+}`)
+    .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+if (vWetWorldNormal.y > 0.5 && uReflectEnable > 0.01) {
+  float isPuddle = step(0.5, vWetType);
+  float isSidewalk = step(1.5, vWetType);
+  vec3 samplePos = vec3(vWetWorldPos.x, isSidewalk > 0.5 ? vWetWorldPos.y - 0.22 : 0.0, vWetWorldPos.z);
+  vec4 rClip = uReflectMatrix * vec4(samplePos, 1.0);
+  vec2 rUV = (rClip.xy / max(rClip.w, 0.0001)) * 0.5 + 0.5;
+
+  vec2 rippleGrad = vec2(0.0);
+  float rippleSpark = 0.0;
+  if (isPuddle > 0.5 && isSidewalk < 0.5) {
+    vec2 g;
+    rippleSpark += rippleRing(vWetWorldPos.xz, vec2(-9.5, -1.6), 0.2, 2.5, g); rippleGrad += g;
+    rippleSpark += rippleRing(vWetWorldPos.xz, vec2(-2.2, 0.8), 1.1, 3.0, g); rippleGrad += g;
+    rippleSpark += rippleRing(vWetWorldPos.xz, vec2(4.4, -1.1), 0.7, 2.5, g); rippleGrad += g;
+    rippleSpark += rippleRing(vWetWorldPos.xz, vec2(10.8, 1.2), 2.1, 3.0, g); rippleGrad += g;
+    rippleSpark += rippleRing(vWetWorldPos.xz, vec2(-14.2, 0.4), 1.6, 2.5, g); rippleGrad += g;
+    rippleSpark += rippleRing(vWetWorldPos.xz, vec2(0.6, -2.0), 0.4, 3.0, g); rippleGrad += g;
+  }
+
+  vec2 uv = rUV + rippleGrad * 0.014;
+  float inBounds = step(0.002, uv.x) * step(uv.x, 0.998) * step(0.002, uv.y) * step(uv.y, 0.998);
+  vec3 reflColor = vec3(0.0);
+  if (inBounds > 0.5) {
+    if (isPuddle > 0.5 && isSidewalk < 0.5) {
+      // Crisp water mirror in puddles
+      reflColor = texture2D(uReflectTex, uv).rgb * 0.82
+                + texture2D(uReflectTex, uv + vec2(0.0018, 0.0018)).rgb * 0.09
+                + texture2D(uReflectTex, uv - vec2(0.0018, 0.0018)).rgb * 0.09;
+    } else {
+      // Anisotropic vertically-streaked reflections on wet asphalt & wet tiles
+      float spread = isSidewalk > 0.5 ? 0.013 : 0.009;
+      vec3 acc = vec3(0.0);
+      acc += texture2D(uReflectTex, clamp(uv + vec2(-spread * 0.3, -spread * 2.2), 0.002, 0.998)).rgb * 0.14;
+      acc += texture2D(uReflectTex, clamp(uv + vec2(0.0, -spread * 1.1), 0.002, 0.998)).rgb * 0.22;
+      acc += texture2D(uReflectTex, uv).rgb * 0.28;
+      acc += texture2D(uReflectTex, clamp(uv + vec2(0.0, spread * 1.1), 0.002, 0.998)).rgb * 0.22;
+      acc += texture2D(uReflectTex, clamp(uv + vec2(spread * 0.3, spread * 2.2), 0.002, 0.998)).rgb * 0.14;
+      reflColor = acc;
+    }
+  }
+
+  vec3 viewDir = normalize(uCamPos - vWetWorldPos);
+  float fresnel = pow(1.0 - max(dot(normalize(vWetWorldNormal), viewDir), 0.0), 3.0);
+  float waterFactor = isPuddle > 0.5 && isSidewalk < 0.5 ? mix(0.55, 0.96, fresnel)
+                    : (isSidewalk > 0.5 ? mix(0.14, 0.42, fresnel) : mix(0.24, 0.62, fresnel));
+
+  // Subtle tile seam on wet cubes
+  float edgeD = min(0.5 - abs(vWetLocalPos.x), 0.5 - abs(vWetLocalPos.z));
+  float seam = 1.0 - 0.16 * (1.0 - smoothstep(0.015, 0.045, edgeD));
+
+  totalEmissiveRadiance += reflColor * waterFactor * uReflectEnable * seam;
+  totalEmissiveRadiance += vec3(0.22, 0.36, 0.52) * rippleSpark * 0.35;
+}`);
+};
+
+// ============================================================================
+// 4. VOXEL PRIMITIVE HELPERS (SIGNS, WIRES, LANTERNS, PEOPLE, SCOOTERS, STALLS)
+// ============================================================================
+
+// Draw Chinese voxel neon sign (backplate + glowing voxel glyphs + optional neon frame)
+function addVoxelNeonSign({
+  text,
+  x, y, z,
+  facing = 'z+', // 'z+', 'z-', 'x+', 'x-'
+  vertical = false,
+  pixel = 0.095,
+  fgColor = 0xff2a85,
+  fgIntensity = 2.6,
+  bgColor = 0x101320,
+  frameColor = 0x00e5ff,
+  frameIntensity = 2.0,
+  charGap = 2
+}) {
+  const chars = Array.isArray(text) ? text : [...text];
+  const glyphW = 9;
+  const glyphH = 9;
+  const cols = vertical ? glyphW : chars.length * glyphW + (chars.length - 1) * charGap;
+  const rows = vertical ? chars.length * glyphH + (chars.length - 1) * charGap : glyphH;
+  const pad = 2;
+  const totalW = (cols + pad * 2) * pixel;
+  const totalH = (rows + pad * 2) * pixel;
+  const depth = pixel * 1.4;
+
+  // Helper converting sign-local (u, v, d) to world coordinates
+  const toWorld = (u, v, d) => {
+    if (facing === 'z+') return [x + u, y + v, z + d];
+    if (facing === 'z-') return [x - u, y + v, z - d];
+    if (facing === 'x+') return [x + d, y + v, z - u];
+    return [x - d, y + v, z + u];
+  };
+
+  // Sign backing box made of dark metal cubes
+  const bwCount = cols + pad * 2;
+  const bhCount = rows + pad * 2;
+  for (let ix = 0; ix < bwCount; ix++) {
+    for (let iy = 0; iy < bhCount; iy++) {
+      const u = (ix - (bwCount - 1) / 2) * pixel;
+      const v = ((bhCount - 1) / 2 - iy) * pixel;
+      const [wx, wy, wz] = toWorld(u, v, 0);
+      const isEdge = ix === 0 || ix === bwCount - 1 || iy === 0 || iy === bhCount - 1;
+      if (isEdge && frameColor != null) {
+        const fc = new THREE.Color(frameColor).multiplyScalar(frameIntensity);
+        const [fx, fy, fz] = toWorld(u, v, pixel * 0.55);
+        emissiveCol.addCube(fx, fy, fz, pixel * 0.92, fc);
+        // Back side of double-sided blade signs
+        if (facing === 'x+' || facing === 'x-') {
+          const [bx, by, bz] = toWorld(u, v, -pixel * 0.55);
+          emissiveCol.addCube(bx, by, bz, pixel * 0.92, fc);
+        }
+      }
+      metalCol.addCube(wx, wy, wz, pixel * 1.02, jitterColor(bgColor, 0.02, wx, wy, wz));
+    }
+  }
+
+  // Render voxel characters onto front (and back for blade signs!)
+  const fgCol = new THREE.Color(fgColor).multiplyScalar(fgIntensity);
+  const doubleSided = facing === 'x+' || facing === 'x-';
+
+  chars.forEach((ch, idx) => {
+    const bmp = GLYPHS[ch] || GLYPHS['市'];
+    const rowsLen = bmp.length;
+    const colsLen = bmp[0].length;
+    const baseCol = vertical ? pad : pad + idx * (glyphW + charGap);
+    const baseRow = vertical ? pad + idx * (glyphH + charGap) : pad;
+
+    for (let r = 0; r < rowsLen; r++) {
+      for (let c = 0; c < colsLen; c++) {
+        if (bmp[r][c] !== '#') continue;
+        const gx = baseCol + c + Math.floor((glyphW - colsLen) / 2);
+        const gy = baseRow + r;
+        const u = (gx - (bwCount - 1) / 2) * pixel;
+        const v = ((bhCount - 1) / 2 - gy) * pixel;
+        const [wx, wy, wz] = toWorld(u, v, depth * 0.65);
+        emissiveCol.addCube(wx, wy, wz, pixel * 0.96, fgCol);
+        if (doubleSided) {
+          // Flip horizontal axis (-u) on back face so characters read forward from BOTH directions!
+          const [bx, by, bz] = toWorld(-u, v, -depth * 0.65);
+          emissiveCol.addCube(bx, by, bz, pixel * 0.96, fgCol);
+        }
+      }
+    }
+  });
+
+  return { width: totalW, height: totalH };
+}
+
+// Overhead sagging catenary wire built purely out of tiny voxel cubes
+function addVoxelWire(p1, p2, sag = 0.65, cubeSize = 0.055, color = 0x10131a, stepDist = 0.052) {
+  const a = new THREE.Vector3(...p1);
+  const b = new THREE.Vector3(...p2);
+  const dist = a.distanceTo(b);
+  const steps = Math.max(8, Math.ceil(dist / stepDist));
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    const p = new THREE.Vector3().lerpVectors(a, b, t);
+    p.y -= Math.sin(t * Math.PI) * sag;
+    matteCol.addCube(p.x, p.y, p.z, cubeSize, color);
+  }
+}
+
+// Animated lantern objects list for gentle post-rain breeze sway
+const animatedLanterns = [];
+const animatedSteamEmitters = [];
+const animatedFans = [];
+const animatedFlickerLights = [];
+const animatedPeople = [];
+const animatedScooters = [];
+const animatedDrops = [];
+const animatedDynamicGroups = [];
+
+function createVoxelLantern(x, y, z, scale = 1.0, phase = 0, colorHex = 0xff2818) {
+  const pivot = new THREE.Group();
+  pivot.position.set(x, y, z);
+
+  // Hanging cord voxel
+  const cord = new THREE.Mesh(sharedBoxGeo, matteMat);
+  cord.scale.set(0.03 * scale, 0.16 * scale, 0.03 * scale);
+  cord.position.set(0, -0.08 * scale, 0);
+  pivot.add(cord);
+
+  const goldMat = new THREE.MeshStandardMaterial({ color: 0xe6a825, roughness: 0.4, metalness: 0.4 });
+  const topCap = new THREE.Mesh(sharedBoxGeo, goldMat);
+  topCap.scale.set(0.18 * scale, 0.06 * scale, 0.18 * scale);
+  topCap.position.set(0, -0.18 * scale, 0);
+  pivot.add(topCap);
+
+  const bodyMat = new THREE.MeshBasicMaterial({
+    color: new THREE.Color(colorHex).multiplyScalar(2.1),
+    toneMapped: false
+  });
+  const body = new THREE.Mesh(sharedBoxGeo, bodyMat);
+  body.scale.set(0.32 * scale, 0.34 * scale, 0.32 * scale);
+  body.position.set(0, -0.36 * scale, 0);
+  pivot.add(body);
+
+  // Inner rib rings
+  const rib = new THREE.Mesh(sharedBoxGeo, new THREE.MeshStandardMaterial({ color: 0x8b0f0a, roughness: 0.6 }));
+  rib.scale.set(0.35 * scale, 0.045 * scale, 0.35 * scale);
+  rib.position.set(0, -0.36 * scale, 0);
+  pivot.add(rib);
+
+  const botCap = new THREE.Mesh(sharedBoxGeo, goldMat);
+  botCap.scale.set(0.16 * scale, 0.06 * scale, 0.16 * scale);
+  botCap.position.set(0, -0.54 * scale, 0);
+  pivot.add(botCap);
+
+  const tassel = new THREE.Mesh(sharedBoxGeo, new THREE.MeshStandardMaterial({ color: 0xd92b2b, roughness: 0.7 }));
+  tassel.scale.set(0.045 * scale, 0.14 * scale, 0.045 * scale);
+  tassel.position.set(0, -0.63 * scale, 0);
+  pivot.add(tassel);
+
+  scene.add(pivot);
+  animatedLanterns.push({ pivot, phase });
+}
+
+function addVoxelLanternString(p1, p2, count = 6, sag = 0.55, scale = 0.95) {
+  addVoxelWire(p1, p2, sag, 0.04, 0x16161c, 0.045);
+  const a = new THREE.Vector3(...p1);
+  const b = new THREE.Vector3(...p2);
+  for (let i = 1; i <= count; i++) {
+    const t = i / (count + 1);
+    const p = new THREE.Vector3().lerpVectors(a, b, t);
+    p.y -= Math.sin(t * Math.PI) * sag;
+    const col = i % 3 === 0 ? 0xff4518 : 0xff2214;
+    createVoxelLantern(p.x, p.y, p.z, scale, i * 0.7 + a.x * 0.2, col);
+  }
+}
+
+// ============================================================================
+// 5. DIORAMA PLINTH, WET ASPHALT, SIDEWALKS & PUDDLES
+// ============================================================================
+function buildDioramaPlinthAndStreet() {
+  // Cutaway diorama plinth (x: -20.5..20.5, z: -13.0..9.5, y: -2.2..0.0)
+  // Rendered ONLY in main camera pass (excluded from reflection pass!)
+  const pX0 = -20.5, pZ0 = -13.0;
+  const nx = 82, nz = 45;
+  const u = 0.5;
+
+  // Deep cutaway soil/bedrock layer + crisp architectural concrete collar
+  for (let ix = 0; ix < nx; ix++) {
+    for (let iz = 0; iz < nz; iz++) {
+      const isBorder = ix === 0 || ix === nx - 1 || iz === 0 || iz === nz - 1;
+      const cx = pX0 + (ix + 0.5) * u;
+      const cz = pZ0 + (iz + 0.5) * u;
+      if (isBorder) {
+        plinthCol.addCube(cx, -0.22, cz, u, jitterColor(0x3a4358, 0.025, cx, -0.2, cz));
+        plinthCol.addCube(cx, -0.72, cz, u, jitterColor(0x282f40, 0.03, cx, -0.7, cz));
+        plinthCol.addCube(cx, -1.22, cz, u, jitterColor(0x1d2230, 0.03, cx, -1.2, cz));
+        plinthCol.addCube(cx, -1.72, cz, u, jitterColor(0x141822, 0.02, cx, -1.7, cz));
+      } else if (ix === 1 || ix === nx - 2 || iz === 1 || iz === nz - 2) {
+        plinthCol.addCube(cx, -0.25, cz, u, jitterColor(0x232938, 0.02, cx, -0.25, cz));
+      }
+    }
+  }
+  // Solid bottom cap of the cutaway slab so underneath looks crisp when orbited
+  plinthCol.fillCubes(-20.5, -1.97, -13.0, 41, 1, 22, 1.0, 0x11151f, { jitter: 0.015 });
+  // Cutaway sewer pipes & glowing fiber conduit visible on West, East & South cross-section edges!
+  for (const px of [-20.55, 20.55]) {
+    for (const pz of [-1.4, 1.4]) {
+      metalCol.addCube(px, -0.85, pz, 0.52, 0x3b495e);
+      matteCol.addCube(px + (px < 0 ? -0.04 : 0.04), -0.85, pz, 0.30, 0x070a10);
+    }
+  }
+  for (const sx of [-10.0, 0.0, 10.0]) {
+    metalCol.addCube(sx, -0.85, 9.55, 0.42, 0x3b495e);
+    emissiveCol.addCube(sx + 0.55, -0.85, 9.54, 0.14, new THREE.Color(0x28d6ff).multiplyScalar(1.6));
+  }
+
+  // Wet Asphalt Road (x: -20..20, z: -3.25..3.25) using 0.25 cubes with top face at y = 0.0
+  // Extra attribute aWetType: 0 = wet asphalt, 1 = puddle mirror, 2 = wet sidewalk tile
+  const rUnit = 0.25;
+  const puddles = [
+    { cx: -14.2, cz: 0.4, rx: 2.3, rz: 1.3 },
+    { cx: -9.5, cz: -1.6, rx: 2.6, rz: 1.1 },
+    { cx: -5.2, cz: 1.4, rx: 1.9, rz: 0.9 },
+    { cx: -2.2, cz: 0.7, rx: 2.7, rz: 1.3 },
+    { cx: 0.6, cz: -2.0, rx: 2.2, rz: 1.0 },
+    { cx: 4.4, cz: -1.1, rx: 2.5, rz: 1.2 },
+    { cx: 7.4, cz: 1.5, rx: 2.1, rz: 0.95 },
+    { cx: 10.8, cz: 1.1, rx: 2.6, rz: 1.2 },
+    { cx: 14.8, cz: -1.4, rx: 2.3, rz: 1.1 },
+    { cx: -17.5, cz: -0.9, rx: 2.0, rz: 1.1 }
+  ];
+
+  const isInPuddle = (wx, wz) => {
+    for (const p of puddles) {
+      const dx = (wx - p.cx) / p.rx;
+      const dz = (wz - p.cz) / p.rz;
+      const wobble = 0.18 * Math.sin(wx * 2.1 + wz * 1.7) + 0.12 * Math.cos(wx * 3.4 - wz * 2.9);
+      if (dx * dx + dz * dz + wobble < 1.0) return true;
+    }
+    return false;
+  };
+
+  for (let wx = -20 + rUnit * 0.5; wx < 20; wx += rUnit) {
+    for (let wz = -3.25 + rUnit * 0.5; wz < 3.25; wz += rUnit) {
+      // Asphalt tile: top at y = 0.0
+      const asphaltCol = jitterColor(0x111520, 0.018, wx, 0, wz);
+      wetGroundCol.add(wx, -0.08, wz, rUnit, 0.16, rUnit, asphaltCol, 0);
+
+      // Puddle sheet slightly proud at top y = 0.014
+      if (isInPuddle(wx, wz)) {
+        wetGroundCol.add(wx, 0.007, wz, rUnit, 0.014, rUnit, 0x090d16, 1);
+      }
+    }
+  }
+
+  // Faded yellow double centerline + white zebra crossing at West archway
+  for (let wx = -15.5; wx <= 18.5; wx += 0.25) {
+    if (Math.floor((wx + 20) * 1.2) % 3 !== 2) {
+      matteCol.add(wx, 0.008, -0.09, 0.23, 0.016, 0.08, jitterColor(0x8c6d1f, 0.03, wx, 0, 0));
+      matteCol.add(wx, 0.008, 0.09, 0.23, 0.016, 0.08, jitterColor(0x8c6d1f, 0.03, wx, 0, 1));
+    }
+  }
+  // Crosswalk stripes near West entrance (x = -16.8)
+  for (let wz = -2.4; wz <= 2.4; wz += 0.8) {
+    for (let wx = -17.3; wx <= -16.2; wx += 0.25) {
+      matteCol.add(wx, 0.009, wz, 0.23, 0.016, 0.36, jitterColor(0x7c8598, 0.03, wx, 0, wz));
+    }
+  }
+
+  // Metal storm-drain grates along curbs
+  for (const gx of [-12.5, -4.5, 3.5, 11.5]) {
+    for (const gz of [-3.05, 3.05]) {
+      for (let i = -2; i <= 2; i++) {
+        metalCol.add(gx + i * 0.14, 0.015, gz, 0.07, 0.03, 0.38, 0x262d3a);
+      }
+      matteCol.add(gx, -0.01, gz, 0.75, 0.03, 0.38, 0x050608);
+    }
+  }
+
+  // Raised Wet Sidewalks (North: z = -5.5..-3.25, South: z = 3.25..5.5), top surface y = 0.22
+  const swUnit = 0.25;
+  for (let wx = -20 + swUnit * 0.5; wx < 20; wx += swUnit) {
+    for (const side of [-1, 1]) {
+      const zStart = side < 0 ? -5.5 + swUnit * 0.5 : 3.25 + swUnit * 0.5;
+      const zEnd = side < 0 ? -3.25 : 5.5;
+      for (let wz = zStart; wz < zEnd; wz += swUnit) {
+        const isCurb = Math.abs(wz) < 3.52;
+        const isTactileYellow = Math.abs(Math.abs(wz) - 3.85) < 0.14;
+        let col = 0x262a35;
+        if (isCurb) col = (Math.floor((wx + 20) * 1.0) % 2 === 0) ? 0x343946 : 0x252933;
+        else if (isTactileYellow) col = 0x6b5a22;
+        else col = ((Math.floor(wx * 4) + Math.floor(wz * 4)) % 2 === 0) ? 0x2b2d38 : 0x242630;
+        wetGroundCol.add(wx, 0.11, wz, swUnit, 0.22, swUnit, jitterColor(col, 0.025, wx, 0.2, wz), 2);
+      }
+    }
+  }
+
+  // Base floor under North & South buildings so nothing floats
+  matteCol.fillCubes(-20.0, 0.0, -12.8, 40, 1, 14, 0.5, 0x1a1f2b, { jitter: 0.02 });
+  matteCol.fillCubes(-20.0, 0.0, 5.5, 40, 1, 8, 0.5, 0x1d2230, { jitter: 0.02 });
+}
+
+// ============================================================================
+// 6. SHENZHEN URBAN VILLAGE BUILDINGS (NORTH TOWERS + SOUTH SHOPHOUSES)
+// ============================================================================
+function buildVoxelBuilding({
+  x0, z0, w, d, h,
+  wallColor, trimColor, tileUnit = 0.5,
+  frontFace = 'z+', // facing toward the street
+  hasBalconies = true,
+  hasAC = true,
+  hasLaundry = false,
+  rng
+}) {
+  const nx = Math.round(w / tileUnit);
+  const ny = Math.round(h / tileUnit);
+  const nz = Math.round(d / tileUnit);
+
+  // Exterior shell of building tiles
+  matteCol.fillCubes(x0, 0.2, z0, nx, ny, nz, tileUnit, (ix, iy, iz) => {
+    if (iy === ny - 1) return 0x20242e; // dark wet roof parapet
+    if (iy === 0 || iy === Math.round(3.6 / tileUnit)) return trimColor;
+    // Classic Shenzhen tiny square mosaic facade rhythm
+    if (iy % 2 === 0 && (ix + iz) % 3 === 0) return new THREE.Color(wallColor).offsetHSL(0, 0, -0.025);
+    return wallColor;
+  }, { shellOnly: true, jitter: 0.025 });
+
+  // Windows & security grilles along street-facing wall (upper stories y >= 3.8)
+  const frontZ = frontFace === 'z+' ? z0 + d : z0;
+  const outSign = frontFace === 'z+' ? 1 : -1;
+  const floors = Math.floor((h - 3.8) / 2.9);
+
+  for (let f = 0; f < floors; f++) {
+    const wy = 4.5 + f * 2.9;
+    const winCount = Math.max(1, Math.floor((w - 1.2) / 2.2));
+    for (let wi = 0; wi < winCount; wi++) {
+      const wx = x0 + 1.3 + wi * ((w - 2.6) / Math.max(1, winCount - 1 || 1));
+      const lit = rng() < 0.62;
+      const warm = rng() < 0.72;
+      const winCol = lit
+        ? new THREE.Color(warm ? 0xffc670 : 0x8de2ff).multiplyScalar(warm ? 1.15 : 1.05)
+        : new THREE.Color(0x0b1220);
+
+      // Window frame
+      matteCol.add(wx, wy, frontZ + outSign * 0.04, 1.1, 1.3, 0.12, 0x1a1e28);
+      // Window glass voxels (split by muntin bar)
+      for (const dx of [-0.26, 0.26]) {
+        for (const dy of [-0.28, 0.28]) {
+          if (lit) {
+            emissiveCol.add(wx + dx, wy + dy, frontZ + outSign * 0.08, 0.42, 0.48, 0.06, winCol);
+          } else {
+            metalCol.add(wx + dx, wy + dy, frontZ + outSign * 0.08, 0.42, 0.48, 0.06, winCol);
+          }
+        }
+      }
+
+      // Security cage bars (防盗网)
+      if (hasBalconies && rng() < 0.75) {
+        const cageZ = frontZ + outSign * 0.24;
+        for (let bx = -0.5; bx <= 0.5; bx += 0.25) {
+          metalCol.add(wx + bx, wy - 0.1, cageZ, 0.04, 1.1, 0.04, 0x525a6a);
+        }
+        metalCol.add(wx, wy - 0.65, frontZ + outSign * 0.14, 1.15, 0.06, 0.26, 0x454d5c);
+        metalCol.add(wx, wy + 0.45, frontZ + outSign * 0.14, 1.15, 0.05, 0.26, 0x454d5c);
+      }
+
+      // External AC Condenser box with animated voxel fan
+      if (hasAC && rng() < 0.55) {
+        const acX = wx + 0.85;
+        const acY = wy - 0.35;
+        const acZ = frontZ + outSign * 0.24;
+        if (acX < x0 + w - 0.6) {
+          matteCol.add(acX, acY, acZ, 0.62, 0.44, 0.36, 0xadb4c2);
+          matteCol.add(acX - 0.12, acY, acZ + outSign * 0.16, 0.3, 0.3, 0.06, 0x1a1e26);
+          // Spinning fan cross
+          const fan = new THREE.Group();
+          fan.position.set(acX - 0.12, acY, acZ + outSign * 0.19);
+          const b1 = new THREE.Mesh(sharedBoxGeo, metalMat);
+          b1.scale.set(0.24, 0.045, 0.03);
+          const b2 = new THREE.Mesh(sharedBoxGeo, metalMat);
+          b2.scale.set(0.045, 0.24, 0.03);
+          fan.add(b1, b2);
+          scene.add(fan);
+          animatedFans.push({ group: fan, speed: 6 + Math.floor(rng() * 5) });
+        }
+      }
+
+      // Hanging laundry pole on upper floors
+      if (hasLaundry && f >= 0 && rng() < 0.45) {
+        const lz = frontZ + outSign * 0.48;
+        metalCol.add(wx, wy - 0.15, lz, 1.35, 0.04, 0.04, 0x9aa2b2);
+        const shirtCols = [0xd94858, 0x3b82d6, 0xe8e4d8, 0xf0b23a, 0x54b878];
+        for (let ci = -1; ci <= 1; ci++) {
+          if (rng() < 0.75) {
+            const sc = shirtCols[Math.floor(rng() * shirtCols.length)];
+            matteCol.add(wx + ci * 0.38, wy - 0.38, lz, 0.28, 0.42, 0.06, sc);
+          }
+        }
+      }
+    }
+  }
+
+  // Rooftop water tank + pipe stack + antennas + rooftop potted plants
+  if (h > 6.5) {
+    const tx = x0 + w * 0.35;
+    const tz = z0 + d * 0.5;
+    metalCol.add(tx, h + 0.8, tz, 1.2, 1.3, 1.2, 0x9aa6ba);
+    metalCol.add(tx - 0.4, h + 0.2, tz - 0.4, 0.14, 0.6, 0.14, 0x454f5e);
+    metalCol.add(tx + 0.4, h + 0.2, tz + 0.4, 0.14, 0.6, 0.14, 0x454f5e);
+    // TV / cellular rooftop antenna mast + tiny red aviation beacon!
+    const ax = x0 + w * 0.78;
+    const az = z0 + d * 0.35;
+    metalCol.add(ax, h + 1.1, az, 0.08, 1.9, 0.08, 0x7c8799);
+    metalCol.add(ax, h + 1.6, az, 0.65, 0.06, 0.06, 0x7c8799);
+    emissiveCol.addCube(ax, h + 2.08, az, 0.10, new THREE.Color(0xff2b2b).multiplyScalar(2.4));
+    // Rooftop skylight / shed hatch
+    matteCol.add(x0 + w * 0.62, h + 0.45, z0 + d * 0.65, 1.4, 0.85, 1.3, 0x2e3545);
+  } else {
+    // Low South market shophouses: tiled rooftop AC, solar heater or flowerpots
+    matteCol.add(x0 + w * 0.3, h + 0.35, z0 + d * 0.5, 0.65, 0.42, 0.42, 0x9aa4b5);
+    matteCol.add(x0 + w * 0.72, h + 0.32, z0 + d * 0.45, 0.45, 0.36, 0.45, 0x733c2a);
+    matteCol.addCube(x0 + w * 0.72, h + 0.65, z0 + d * 0.45, 0.34, 0x2f8545);
+  }
+
+  // Exterior vertical PVC drain pipes down wall
+  const pipeX = x0 + 0.35;
+  metalCol.add(pipeX, h * 0.5, frontZ + outSign * 0.08, 0.14, h - 0.4, 0.14, 0x363d4a);
+}
+
+function buildBuildingsAndArchitecture() {
+  const rng = createRng(4207);
+
+  // NORTH SIDE: Tall Shenzhen Urban Village ("握手楼") row, z = -12.8 .. -5.5
+  buildVoxelBuilding({
+    x0: -18.5, z0: -12.5, w: 7.5, d: 7.0, h: 11.5,
+    wallColor: 0x3e5252, trimColor: 0x293638, frontFace: 'z+',
+    hasBalconies: true, hasAC: true, hasLaundry: true, rng
+  });
+  buildVoxelBuilding({
+    x0: -10.8, z0: -12.8, w: 8.2, d: 7.3, h: 13.5,
+    wallColor: 0x625750, trimColor: 0x3e3733, frontFace: 'z+',
+    hasBalconies: true, hasAC: true, hasLaundry: true, rng
+  });
+  buildVoxelBuilding({
+    x0: -2.4, z0: -12.6, w: 8.4, d: 7.1, h: 12.0,
+    wallColor: 0x4b5869, trimColor: 0x2f3845, frontFace: 'z+',
+    hasBalconies: true, hasAC: true, hasLaundry: true, rng
+  });
+  buildVoxelBuilding({
+    x0: 6.2, z0: -12.8, w: 7.8, d: 7.3, h: 14.0,
+    wallColor: 0x614b4b, trimColor: 0x403131, frontFace: 'z+',
+    hasBalconies: true, hasAC: true, hasLaundry: true, rng
+  });
+  buildVoxelBuilding({
+    x0: 14.2, z0: -12.4, w: 5.3, d: 6.9, h: 10.5,
+    wallColor: 0x485c54, trimColor: 0x2f3d37, frontFace: 'z+',
+    hasBalconies: true, hasAC: true, hasLaundry: true, rng
+  });
+
+  // SOUTH SIDE: Low single-story market shophouses (z = 5.5 .. 8.7, h = 3.2..4.1)
+  // Intentionally low cutaway front edge so elevated diorama cameras see straight down into the glowing market!
+  buildVoxelBuilding({
+    x0: -18.2, z0: 5.5, w: 7.4, d: 3.2, h: 3.5,
+    wallColor: 0x566073, trimColor: 0x353c4a, frontFace: 'z-',
+    hasBalconies: false, hasAC: false, hasLaundry: false, rng
+  });
+  buildVoxelBuilding({
+    x0: -10.5, z0: 5.5, w: 7.6, d: 3.2, h: 3.2,
+    wallColor: 0x695952, trimColor: 0x443934, frontFace: 'z-',
+    hasBalconies: false, hasAC: false, hasLaundry: false, rng
+  });
+  buildVoxelBuilding({
+    x0: -2.5, z0: 5.5, w: 7.6, d: 3.2, h: 3.4,
+    wallColor: 0x4d6266, trimColor: 0x314042, frontFace: 'z-',
+    hasBalconies: false, hasAC: false, hasLaundry: false, rng
+  });
+  buildVoxelBuilding({
+    x0: 5.5, z0: 5.5, w: 7.2, d: 3.2, h: 3.2,
+    wallColor: 0x635b50, trimColor: 0x403a33, frontFace: 'z-',
+    hasBalconies: false, hasAC: false, hasLaundry: false, rng
+  });
+  buildVoxelBuilding({
+    x0: 13.0, z0: 5.5, w: 6.4, d: 3.3, h: 4.1,
+    wallColor: 0x424e66, trimColor: 0x293242, frontFace: 'z-',
+    hasBalconies: false, hasAC: false, hasLaundry: false, rng
+  });
+
+  // Back cutaway terrace railing & potted plants along South rim (z = 8.95)
+  for (let rx = -19.0; rx <= 19.0; rx += 1.0) {
+    metalCol.add(rx, 0.48, 9.0, 0.08, 0.56, 0.08, 0x4f596e);
+    if (Math.abs(rx) % 4 === 0) {
+      matteCol.add(rx + 0.4, 0.38, 8.95, 0.36, 0.32, 0.36, 0x6e3d2d);
+      matteCol.addCube(rx + 0.4, 0.68, 8.95, 0.30, 0x2d8042);
+    }
+  }
+  metalCol.add(0.0, 0.74, 9.0, 38.2, 0.07, 0.08, 0x626e85);
+
+  // Back wall details on South shophouses (z = 8.75) so 360-degree overview & Free Cam look detailed!
+  for (const bx of [-15.5, -7.2, 0.8, 8.8, 16.0]) {
+    // Metal roll-up shutter door & small lit rear service window
+    metalCol.add(bx, 1.1, 8.76, 2.2, 1.8, 0.10, 0x3b4456);
+    for (let ry = 0.4; ry <= 1.8; ry += 0.28) {
+      matteCol.add(bx, ry, 8.82, 2.1, 0.06, 0.05, 0x232936);
+    }
+    emissiveCol.add(bx + 1.8, 2.15, 8.76, 0.75, 0.55, 0.06, new THREE.Color(0xffc978).multiplyScalar(0.95));
+    metalCol.add(bx - 1.6, 2.2, 8.78, 0.42, 0.42, 0.14, 0x677285);
+  }
+
+  // 24H Convenience Store glowing storefront at South-East corner (x = 13.5..19.0, z = 5.45)
+  emissiveCol.add(16.2, 2.95, 5.42, 5.2, 0.16, 0.14, new THREE.Color(0x00e5ff).multiplyScalar(2.1));
+  emissiveCol.add(16.2, 3.35, 5.42, 5.2, 0.14, 0.14, new THREE.Color(0xff5228).multiplyScalar(2.0));
+  // Bright interior window + aluminum mullions + refrigerator shelves
+  metalCol.add(16.2, 1.55, 5.46, 4.6, 2.25, 0.08, 0x242c3b);
+  emissiveCol.add(16.2, 1.55, 5.50, 4.35, 2.05, 0.10, new THREE.Color(0xcff6ff).multiplyScalar(1.15));
+  for (const sy of [0.76, 1.26, 1.76]) {
+    metalCol.add(16.2, sy, 5.42, 4.2, 0.05, 0.16, 0x6f7c91);
+  }
+  // Cooler drink bottles resting cleanly on shelves inside window
+  const drinkCols = [0xff4455, 0x33dd88, 0xffaa22, 0x44aaff];
+  for (let bx = 14.5; bx <= 17.8; bx += 0.35) {
+    for (const by of [0.86, 1.36, 1.86]) {
+      matteCol.addCube(bx, by, 5.41, 0.14, drinkCols[Math.round(bx * 3 + by * 2) % drinkCols.length]);
+    }
+  }
+  // Flush on store facade below roof so back never floats as dark slab!
+  addVoxelNeonSign({
+    text: '24H',
+    x: 16.2, y: 3.68, z: 5.38,
+    facing: 'z-',
+    pixel: 0.075,
+    fgColor: 0x44f5ff,
+    fgIntensity: 2.5,
+    frameColor: 0xff4522
+  });
+
+  // WEST NIGHT MARKET ARCHWAY ("深圳夜市") at x = -17.6
+  for (const pz of [-3.65, 3.65]) {
+    // Pillar base & tiled column
+    matteCol.fillCubes(-18.0, 0.2, pz - 0.4, 2, 11, 2, 0.4, (ix, iy) => iy % 3 === 0 ? 0x8f1d24 : 0x2d3240, { jitter: 0.02 });
+    // Glowing vertical trim strip on pillar
+    emissiveCol.add(-17.18, 2.6, pz, 0.08, 3.8, 0.12, new THREE.Color(0xffaa22).multiplyScalar(2.1));
+  }
+  // Arch crossbeam at y = 5.4..6.6
+  matteCol.fillCubes(-18.1, 5.1, -4.1, 2, 3, 21, 0.4, 0x222634, { shellOnly: true, jitter: 0.02 });
+  // Traditional upturned voxel roof eaves on archway!
+  matteCol.fillCubes(-18.3, 6.3, -4.5, 3, 1, 23, 0.4, 0x7c1f24, { jitter: 0.02 });
+  matteCol.fillCubes(-18.1, 6.7, -4.1, 2, 1, 21, 0.4, 0x99262c, { jitter: 0.02 });
+  // Upturned corner horn tips
+  for (const ez of [-4.6, 4.6]) {
+    matteCol.addCube(-17.6, 6.85, ez, 0.35, 0xd49b28);
+  }
+  // Glowing "深圳夜市" neon sign facing BOTH outside (West) & inside (East)!
+  addVoxelNeonSign({
+    text: '深圳夜市',
+    x: -18.25, y: 5.75, z: 0,
+    facing: 'x-',
+    pixel: 0.11,
+    fgColor: 0xff2f7b,
+    fgIntensity: 2.8,
+    frameColor: 0xffc83d,
+    frameIntensity: 2.1
+  });
+  addVoxelNeonSign({
+    text: '深圳夜市',
+    x: -17.15, y: 5.75, z: 0,
+    facing: 'x+',
+    pixel: 0.11,
+    fgColor: 0x26f5ff,
+    fgIntensity: 2.6,
+    frameColor: 0xff3b7a,
+    frameIntensity: 2.0
+  });
+  // Twin hanging red lanterns under the archway
+  createVoxelLantern(-17.6, 5.1, -2.1, 1.35, 0.0, 0xff2414);
+  createVoxelLantern(-17.6, 5.1, 2.1, 1.35, 1.2, 0xff2414);
+
+  // EAST ALLEY GATEWAY BANNER (x = +18.8) — frames the East vanishing point cleanly at y >= 4.8!
+  for (const pz of [-3.65, 3.65]) {
+    metalCol.add(18.8, 2.75, pz, 0.24, 5.1, 0.24, 0x2c3342);
+    emissiveCol.add(18.7, 2.5, pz, 0.08, 3.2, 0.10, new THREE.Color(0x28e8ff).multiplyScalar(1.9));
+  }
+  metalCol.add(18.8, 5.3, 0, 0.30, 0.36, 7.6, 0x222634);
+  addVoxelNeonSign({
+    text: '夜市',
+    x: 18.55, y: 5.5, z: 0,
+    facing: 'x-',
+    pixel: 0.10,
+    fgColor: 0xffaa22,
+    fgIntensity: 2.5,
+    frameColor: 0x00e5ff
+  });
+  createVoxelLantern(18.8, 5.15, -2.2, 1.15, 0.5, 0xff2414);
+  createVoxelLantern(18.8, 5.15, 2.2, 1.15, 1.7, 0xff2414);
+}
+
+// ============================================================================
+// 7. NEON SIGNS, UTILITY POLES, OVERHEAD WIRES & LANTERN CANOPY
+// ============================================================================
+function buildNeonAndOverheadWires() {
+  // North building giant vertical & horizontal neon signs (mounted on steel brackets to z = -5.5!)
+  addVoxelNeonSign({
+    text: '生蚝',
+    x: -13.5, y: 6.2, z: -4.2,
+    facing: 'x+',
+    vertical: true,
+    pixel: 0.105,
+    fgColor: 0x00f0ff,
+    fgIntensity: 2.6,
+    frameColor: 0xff2e88
+  });
+  metalCol.add(-13.5, 6.8, -4.85, 0.10, 0.10, 1.35, 0x454e5e);
+  metalCol.add(-13.5, 5.5, -4.85, 0.10, 0.10, 1.35, 0x454e5e);
+
+  addVoxelNeonSign({
+    text: '烧烤',
+    x: -1.5, y: 6.8, z: -4.1,
+    facing: 'x+',
+    vertical: true,
+    pixel: 0.115,
+    fgColor: 0xff3864,
+    fgIntensity: 2.8,
+    frameColor: 0xffaa22
+  });
+  metalCol.add(-1.5, 7.5, -4.8, 0.10, 0.10, 1.4, 0x454e5e);
+  metalCol.add(-1.5, 6.1, -4.8, 0.10, 0.10, 1.4, 0x454e5e);
+
+  addVoxelNeonSign({
+    text: '牛肉面',
+    x: 7.4, y: 7.0, z: -4.1,
+    facing: 'x+',
+    vertical: true,
+    pixel: 0.10,
+    fgColor: 0xffbf2e,
+    fgIntensity: 2.5,
+    frameColor: 0x00e5ff
+  });
+  metalCol.add(7.4, 7.9, -4.8, 0.10, 0.10, 1.4, 0x454e5e);
+  metalCol.add(7.4, 6.1, -4.8, 0.10, 0.10, 1.4, 0x454e5e);
+
+  // South freestanding steel-mast blade signs (anchored cleanly into South shophouse parapet & sidewalk!)
+  addVoxelNeonSign({
+    text: '海鲜',
+    x: -8.5, y: 4.3, z: 4.35,
+    facing: 'x+',
+    vertical: true,
+    pixel: 0.095,
+    fgColor: 0x26ffaa,
+    fgIntensity: 2.5,
+    frameColor: 0x1eb8ff
+  });
+  metalCol.add(-8.5, 2.7, 5.05, 0.12, 4.9, 0.12, 0x4c5669);
+  metalCol.add(-8.5, 4.7, 4.7, 0.10, 0.10, 0.8, 0x4c5669);
+  metalCol.add(-8.5, 3.6, 4.7, 0.10, 0.10, 0.8, 0x4c5669);
+
+  addVoxelNeonSign({
+    text: '鲜茶',
+    x: 1.0, y: 4.4, z: 4.35,
+    facing: 'x+',
+    vertical: true,
+    pixel: 0.095,
+    fgColor: 0xff5ce6,
+    fgIntensity: 2.6,
+    frameColor: 0xffe44d
+  });
+  metalCol.add(1.0, 2.7, 5.05, 0.12, 5.0, 0.12, 0x4c5669);
+  metalCol.add(1.0, 4.8, 4.7, 0.10, 0.10, 0.8, 0x4c5669);
+  metalCol.add(1.0, 3.7, 4.7, 0.10, 0.10, 0.8, 0x4c5669);
+
+  // Flat facade horizontal neon signs + icon signs
+  addVoxelNeonSign({
+    text: '夜市',
+    x: -6.5, y: 4.9, z: -5.35,
+    facing: 'z+',
+    pixel: 0.11,
+    fgColor: 0xffaa1d,
+    fgIntensity: 2.5,
+    frameColor: 0xff2a6d
+  });
+  addVoxelNeonSign({
+    text: ['icon_beer', '酒'],
+    x: 3.2, y: 4.8, z: -5.35,
+    facing: 'z+',
+    pixel: 0.10,
+    fgColor: 0x35ff9e,
+    fgIntensity: 2.5,
+    frameColor: 0x00d9ff
+  });
+  addVoxelNeonSign({
+    text: ['icon_bowl', '粉'],
+    x: 12.2, y: 5.0, z: -5.35,
+    facing: 'z+',
+    pixel: 0.10,
+    fgColor: 0xff6233,
+    fgIntensity: 2.6,
+    frameColor: 0xffd044
+  });
+  addVoxelNeonSign({
+    text: ['icon_lemon', '茶'],
+    x: 1.0, y: 2.95, z: 5.38,
+    facing: 'z-',
+    pixel: 0.085,
+    fgColor: 0xffe63b,
+    fgIntensity: 2.5,
+    frameColor: 0xff49c2
+  });
+
+  // Concrete Utility Poles (电线杆) at key intersections (all physically grounded)
+  const poles = [
+    { x: -16.8, z: -4.6, h: 9.8 },
+    { x: -12.4, z: 4.9, h: 8.4 },
+    { x: -3.8, z: 4.9, h: 8.6 },
+    { x: 11.2, z: -4.8, h: 10.2 },
+    { x: 18.2, z: 4.8, h: 9.4 }
+  ];
+  for (const p of poles) {
+    matteCol.fillCubes(p.x - 0.18, 0.22, p.z - 0.18, 1, Math.round(p.h / 0.36), 1, 0.36, 0x3f4654, { jitter: 0.02 });
+    metalCol.add(p.x, p.h - 0.5, p.z, 0.12, 0.12, 1.5, 0x555f73);
+    metalCol.add(p.x, p.h - 1.3, p.z, 1.3, 0.12, 0.12, 0x555f73);
+    if (p.x > 10) {
+      metalCol.add(p.x + 0.35, p.h - 2.3, p.z, 0.55, 0.9, 0.55, 0x2c3442);
+      emissiveCol.addCube(p.x + 0.35, p.h - 2.0, p.z - 0.29, 0.07, new THREE.Color(0x22ff66).multiplyScalar(2.4));
+    }
+    matteCol.add(p.x, p.h - 3.6, p.z, 0.52, 0.28, 0.52, 0x11131a);
+  }
+
+  // Criss-crossing Shenzhen overhead power cables anchored strictly to poles & North/South walls!
+  const wires = [
+    [[-16.8, 9.2, -4.6], [-12.4, 7.9, 4.9], 0.72],
+    [[-16.8, 8.8, -4.3], [-12.4, 7.6, 4.6], 0.90],
+    [[-16.8, 8.4, -4.8], [-11.0, 8.8, -5.5], 0.55],
+    [[-12.4, 7.9, 4.9], [-3.8, 8.1, 4.9], 0.65],
+    [[-12.4, 7.5, 4.7], [-3.8, 7.7, 4.7], 0.85],
+    [[-16.8, 9.0, -4.6], [-3.8, 8.1, 4.9], 0.95],
+    [[-3.8, 8.1, 4.9], [11.2, 9.6, -4.8], 1.15],
+    [[-3.8, 7.7, 4.6], [11.2, 9.2, -4.5], 1.35],
+    [[-3.8, 7.2, 4.9], [18.2, 8.6, 4.8], 1.05],
+    [[11.2, 9.6, -4.8], [18.2, 8.9, 4.8], 0.95],
+    [[11.2, 9.2, -4.4], [18.2, 8.5, 4.5], 1.15],
+    [[11.2, 8.2, -4.8], [-6.5, 8.5, -5.5], 0.90],
+    [[1.2, 8.4, -5.5], [-3.8, 7.4, 4.9], 0.78],
+    [[-10.2, 7.8, -5.5], [-12.4, 7.2, 4.9], 0.70],
+    [[14.5, 7.6, -5.5], [18.2, 8.8, 4.8], 0.75]
+  ];
+  for (const [a, b, sag] of wires) {
+    addVoxelWire(a, b, sag, 0.055, 0x10131c, 0.052);
+  }
+
+  // Glowing Red Lantern Strings crisscrossing street anchored to North wall (y~4.9) & South poles/parapets (y~3.8..4.5)!
+  addVoxelLanternString([-14.5, 5.0, -5.2], [-12.4, 4.6, 4.9], 5, 0.50, 0.92);
+  addVoxelLanternString([-9.5, 5.1, -5.2], [-3.8, 4.7, 4.9], 6, 0.54, 0.95);
+  addVoxelLanternString([-3.0, 5.2, -5.2], [1.0, 4.8, 5.05], 6, 0.56, 1.0);
+  addVoxelLanternString([4.0, 5.1, -5.2], [10.0, 4.2, 5.2], 6, 0.50, 0.92);
+  addVoxelLanternString([11.0, 5.0, -5.2], [18.2, 4.6, 4.8], 5, 0.48, 0.90);
+}
+
+// ============================================================================
+// 8. SIX STORY STALLS, STEAM, FOOD, TABLES, STOOLS & PROPS
+// ============================================================================
+function addAwning(x0, z0, w, d, yHigh, yLow, slopeDirZ, stripeA, stripeB) {
+  const u = 0.25;
+  const nx = Math.round(w / u);
+  const nz = Math.round(d / u);
+  for (let ix = 0; ix < nx; ix++) {
+    const col = Math.floor(ix / 2) % 2 === 0 ? stripeA : stripeB;
+    for (let iz = 0; iz < nz; iz++) {
+      const frac = slopeDirZ > 0 ? iz / (nz - 1) : 1 - iz / (nz - 1);
+      const y = THREE.MathUtils.lerp(yHigh, yLow, frac);
+      const wx = x0 + (ix + 0.5) * u;
+      const wz = z0 + (iz + 0.5) * u;
+      matteCol.add(wx, y, wz, u, 0.08, u, jitterColor(col, 0.03, wx, y, wz));
+    }
+  }
+  // Steel support poles at outer corners
+  const outerZ = slopeDirZ > 0 ? z0 + d - 0.12 : z0 + 0.12;
+  for (const px of [x0 + 0.14, x0 + w - 0.14]) {
+    metalCol.add(px, (yLow + 0.22) * 0.5, outerZ, 0.08, yLow - 0.22, 0.08, 0x677285);
+  }
+}
+
+function addHangingBulb(x, y, z, colorHex = 0xffb84d, intensity = 2.8) {
+  matteCol.add(x, y + 0.25, z, 0.04, 0.45, 0.04, 0x151822);
+  matteCol.add(x, y + 0.07, z, 0.14, 0.06, 0.14, 0x3b404d);
+  emissiveCol.addCube(x, y, z, 0.14, new THREE.Color(colorHex).multiplyScalar(intensity));
+}
+
+function addRedPlasticStool(x, y, z) {
+  const col = 0xc9222e;
+  matteCol.add(x, y + 0.42, z, 0.34, 0.06, 0.34, jitterColor(col, 0.03, x, y, z));
+  for (const dx of [-0.12, 0.12]) {
+    for (const dz of [-0.12, 0.12]) {
+      matteCol.add(x + dx, y + 0.21, z + dz, 0.06, 0.42, 0.06, col);
+    }
+  }
+}
+
+function addFoldingTable(x, y, z, w = 1.2, d = 1.0, topColor = 0x22559c) {
+  matteCol.add(x, y + 0.72, z, w, 0.07, d, jitterColor(topColor, 0.025, x, y, z));
+  for (const dx of [-w * 0.42, w * 0.42]) {
+    for (const dz of [-d * 0.42, d * 0.42]) {
+      metalCol.add(x + dx, y + 0.36, z + dz, 0.05, 0.72, 0.05, 0x7b8596);
+    }
+  }
+}
+
+function addTableMealProps(x, yTop, z, rng) {
+  // Green glass beer bottles
+  for (let i = 0; i < 3; i++) {
+    const bx = x + (rng() - 0.5) * 0.7;
+    const bz = z + (rng() - 0.5) * 0.5;
+    matteCol.add(bx, yTop + 0.11, bz, 0.09, 0.22, 0.09, 0x1f7a3d);
+    matteCol.add(bx, yTop + 0.25, bz, 0.05, 0.08, 0.05, 0x26944b);
+  }
+  // Noodle bowls + chopsticks
+  for (const [bx, bz] of [[x - 0.26, z - 0.18], [x + 0.26, z + 0.18]]) {
+    matteCol.add(bx, yTop + 0.06, bz, 0.22, 0.11, 0.22, 0xeae8e0);
+    matteCol.add(bx, yTop + 0.11, bz, 0.16, 0.04, 0.16, 0xe08f38); // broth/noodles
+    matteCol.add(bx + 0.09, yTop + 0.13, bz, 0.22, 0.025, 0.025, 0xc22a2a); // chopsticks
+  }
+  // Red plastic tissue box
+  matteCol.add(x, yTop + 0.06, z, 0.18, 0.11, 0.12, 0xd12630);
+  matteCol.add(x, yTop + 0.13, z, 0.08, 0.04, 0.05, 0xf2f2f2);
+}
+
+function addSteamEmitter(x, y, z, { count = 16, spread = 0.28, height = 2.6, baseSize = 0.14, color = 0xdbe6f5, speed = 1.0, outZ = 0.0 } = {}) {
+  animatedSteamEmitters.push({ x, y, z, count, spread, height, baseSize, color, speed, outZ });
+}
+
+function buildAllStalls() {
+  const rng = createRng(8881);
+
+  // --------------------------------------------------------------------------
+  // STALL 1: Sizzling Wok & Stir-fry Cart (North-West: x = -10.5, z = -4.35)
+  // --------------------------------------------------------------------------
+  {
+    const sx = -10.5, sy = 0.22, sz = -4.35;
+    addAwning(-12.3, -5.4, 3.6, 2.5, 3.1, 2.5, 1, 0x1e5cb3, 0xd93030);
+    addHangingBulb(sx - 0.5, 2.45, sz + 0.35, 0xffb347, 3.2);
+    addHangingBulb(sx + 0.7, 2.45, sz + 0.35, 0xffaa3b, 3.0);
+
+    // Stainless steel rolling cart
+    metalCol.fillCubes(sx - 1.35, sy + 0.18, sz - 0.55, 11, 4, 4, 0.24, 0x8994a6, { jitter: 0.02 });
+    // Caster wheels
+    for (const wx of [sx - 1.2, sx + 1.1]) {
+      for (const wz of [sz - 0.4, sz + 0.3]) {
+        matteCol.addCube(wx, sy + 0.09, wz, 0.18, 0x151821);
+      }
+    }
+    // Glowing blue gas ring + huge black wok + stir-fry inside
+    emissiveCol.add(sx - 0.4, sy + 1.16, sz + 0.05, 0.52, 0.08, 0.52, new THREE.Color(0x2ea8ff).multiplyScalar(2.6));
+    matteCol.add(sx - 0.4, sy + 1.24, sz + 0.05, 0.85, 0.16, 0.85, 0x1c2028);
+    // Wok contents (noodles, greens, chilies)
+    matteCol.add(sx - 0.4, sy + 1.33, sz + 0.05, 0.62, 0.09, 0.62, 0xd89f3c);
+    matteCol.addCube(sx - 0.5, sy + 1.38, sz + 0.12, 0.11, 0x45b849);
+    matteCol.addCube(sx - 0.3, sy + 1.39, sz - 0.04, 0.09, 0xe83328);
+
+    // Animated Wok Hei flame burst + rising thick steam!
+    const wokFlame = new THREE.Mesh(
+      sharedBoxGeo,
+      new THREE.MeshBasicMaterial({ color: new THREE.Color(0xff8c1a).multiplyScalar(3.2), toneMapped: false })
+    );
+    wokFlame.position.set(sx - 0.4, sy + 1.55, sz + 0.05);
+    wokFlame.scale.set(0.32, 0.45, 0.32);
+    scene.add(wokFlame);
+    animatedDynamicGroups.push((t) => {
+      const p = Math.pow(Math.max(0, Math.sin(t * TAU / 3.0)), 6);
+      const s = 0.25 + p * 0.65;
+      wokFlame.scale.set(0.28 * s, 0.4 + p * 0.75, 0.28 * s);
+      wokFlame.position.y = sy + 1.44 + p * 0.28;
+    });
+
+    addSteamEmitter(sx - 0.4, sy + 1.50, sz + 0.35, { count: 22, spread: 0.28, height: 2.8, baseSize: 0.15, speed: 1.0, outZ: 1.15 });
+
+    // Condiments, stacked takeout boxes, fresh veggies on side counter
+    for (let i = 0; i < 4; i++) {
+      matteCol.add(sx + 0.65, sy + 1.18 + i * 0.12, sz + 0.1, 0.28, 0.10, 0.22, 0xf2f2ec);
+    }
+    matteCol.add(sx + 0.25, sy + 1.24, sz + 0.15, 0.12, 0.24, 0.12, 0x701e14);
+    matteCol.add(sx + 0.42, sy + 1.22, sz + 0.12, 0.11, 0.20, 0.11, 0xd63626);
+    matteCol.add(sx + 0.95, sy + 1.18, sz - 0.05, 0.26, 0.12, 0.26, 0x4ca83e);
+  }
+
+  // --------------------------------------------------------------------------
+  // STALL 2: Charcoal Oyster & Skewer BBQ (North-Center: x = -1.5, z = -4.4)
+  // --------------------------------------------------------------------------
+  {
+    const sx = -1.5, sy = 0.22, sz = -4.4;
+    addAwning(-3.6, -5.4, 4.2, 2.4, 3.2, 2.55, 1, 0xc92c2c, 0xf0c948);
+    addHangingBulb(sx - 0.8, 2.45, sz + 0.4, 0xffaa38, 3.0);
+    addHangingBulb(sx + 0.8, 2.45, sz + 0.4, 0xff942e, 2.9);
+
+    // Long charcoal grill trough
+    metalCol.fillCubes(sx - 1.5, sy + 0.15, sz - 0.4, 15, 4, 4, 0.20, 0x2e3440, { jitter: 0.02 });
+    // Glowing charcoal ember bed
+    for (let ex = sx - 1.3; ex <= sx + 1.3; ex += 0.2) {
+      for (let ez = sz - 0.22; ez <= sz + 0.22; ez += 0.2) {
+        const hot = hash3(ex * 7, 1, ez * 9);
+        const col = hot > 0.55 ? 0xff4512 : (hot > 0.25 ? 0xff8c1a : 0x381410);
+        if (hot > 0.25) {
+          emissiveCol.addCube(ex, sy + 0.98, ez, 0.16, new THREE.Color(col).multiplyScalar(2.4));
+        } else {
+          matteCol.addCube(ex, sy + 0.98, ez, 0.16, col);
+        }
+      }
+    }
+    // Oysters on the half-shell & BBQ skewers lined across the grate!
+    for (let ox = sx - 1.15; ox <= sx + 0.15; ox += 0.26) {
+      for (const oz of [sz - 0.12, sz + 0.14]) {
+        matteCol.add(ox, sy + 1.10, oz, 0.20, 0.06, 0.16, 0xd8dcd8); // shell
+        matteCol.add(ox, sy + 1.14, oz, 0.12, 0.05, 0.10, 0xffe485); // garlic oyster meat
+        matteCol.addCube(ox + 0.02, sy + 1.17, oz, 0.04, 0x4bc952); // scallion dot
+      }
+    }
+    for (let kx = sx + 0.4; kx <= sx + 1.25; kx += 0.18) {
+      matteCol.add(kx, sy + 1.12, sz, 0.07, 0.06, 0.52, 0xa85224); // meat skewer
+      matteCol.add(kx, sy + 1.12, sz + 0.30, 0.03, 0.03, 0.14, 0xd6ba82); // stick
+    }
+    // Smoke & glowing embers rising from BBQ out from under awning
+    addSteamEmitter(sx - 0.4, sy + 1.25, sz + 0.30, { count: 18, spread: 0.50, height: 2.6, baseSize: 0.15, color: 0xc8ccd8, speed: 0.75, outZ: 1.1 });
+    addSteamEmitter(sx + 0.8, sy + 1.25, sz + 0.30, { count: 12, spread: 0.38, height: 2.3, baseSize: 0.13, color: 0xd0d4de, speed: 0.85, outZ: 1.0 });
+
+    // Glowing vertical glass skewer fridge beside the grill
+    metalCol.add(sx + 1.85, sy + 0.85, sz - 0.1, 0.75, 1.7, 0.7, 0x262c38);
+    emissiveCol.add(sx + 1.85, sy + 1.05, sz + 0.26, 0.6, 1.1, 0.06, new THREE.Color(0x9eeeff).multiplyScalar(1.25));
+  }
+
+  // --------------------------------------------------------------------------
+  // STALL 3: Bamboo Steamer Dim Sum & Roast Duck (North-East: x = +7.5, z = -4.25)
+  // --------------------------------------------------------------------------
+  {
+    const sx = 7.5, sy = 0.22, sz = -4.25;
+    addAwning(5.6, -5.4, 3.8, 2.4, 3.15, 2.5, 1, 0x238a5e, 0xe8e4d8);
+    addHangingBulb(sx - 0.6, 2.45, sz + 0.35, 0xffc663, 2.8);
+    addHangingBulb(sx + 0.6, 2.45, sz + 0.35, 0xffc663, 2.8);
+
+    // Timber-trimmed serving counter
+    matteCol.fillCubes(sx - 1.5, sy, sz - 0.5, 12, 4, 4, 0.25, 0x5c3e2a, { jitter: 0.03 });
+    // Metal steaming pot + stacked bamboo steamer towers
+    metalCol.add(sx - 0.85, sy + 1.15, sz, 0.72, 0.32, 0.72, 0x9aa4b4);
+    for (let tier = 0; tier < 3; tier++) {
+      const ty = sy + 1.42 + tier * 0.24;
+      matteCol.add(sx - 0.85, ty, sz, 0.62, 0.22, 0.62, jitterColor(0xc99c5b, 0.03, sx, ty, sz));
+    }
+    // Second open steamer revealing tiny white baozi buns!
+    matteCol.add(sx - 0.1, sy + 1.25, sz + 0.05, 0.58, 0.20, 0.58, 0xc29352);
+    for (const [bx, bz] of [[-0.12, -0.1], [0.12, -0.1], [-0.12, 0.12], [0.12, 0.12]]) {
+      matteCol.addCube(sx - 0.1 + bx, sy + 1.38, sz + 0.05 + bz, 0.14, 0xf7f5eb);
+    }
+    addSteamEmitter(sx - 0.85, sy + 1.95, sz + 0.30, { count: 16, spread: 0.22, height: 2.3, baseSize: 0.15, speed: 0.9, outZ: 1.05 });
+    addSteamEmitter(sx - 0.1, sy + 1.48, sz + 0.35, { count: 14, spread: 0.20, height: 2.0, baseSize: 0.13, speed: 0.85, outZ: 0.95 });
+
+    // Glowing roast duck display cabinet (amber-lit!)
+    metalCol.add(sx + 0.95, sy + 1.55, sz, 0.85, 1.1, 0.65, 0x3b404d);
+    emissiveCol.add(sx + 0.95, sy + 1.98, sz, 0.68, 0.08, 0.48, new THREE.Color(0xff9b38).multiplyScalar(2.4));
+    // Hanging glazed ducks inside
+    for (const dx of [-0.18, 0.18]) {
+      matteCol.add(sx + 0.95 + dx, sy + 1.55, sz, 0.20, 0.44, 0.20, 0x9c3518);
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // STALL 4: Aqua Seafood Tanks & Dai Pai Dong Eating Area (South-West: x = -8.5, z = +4.25)
+  // --------------------------------------------------------------------------
+  {
+    const sx = -8.5, sy = 0.22, sz = 4.25;
+    addAwning(-10.5, 3.0, 4.0, 2.5, 2.5, 3.15, -1, 0x16808c, 0xebebe4);
+    addHangingBulb(sx - 0.5, 2.45, sz - 0.35, 0x8beeff, 2.6);
+
+    // Stacked glowing aqua seafood tanks!
+    metalCol.fillCubes(sx - 1.4, sy, sz - 0.4, 9, 2, 3, 0.3, 0x262f3d, { jitter: 0.02 });
+    for (const tx of [sx - 0.95, sx - 0.05]) {
+      for (const ty of [sy + 0.88, sy + 1.58]) {
+        // Backlit glowing water tank volume
+        emissiveCol.add(tx, ty, sz, 0.78, 0.56, 0.62, new THREE.Color(0x1bdcff).multiplyScalar(1.25));
+        // Tank frame edges
+        metalCol.add(tx, ty + 0.30, sz, 0.84, 0.06, 0.68, 0x212833);
+        metalCol.add(tx, ty - 0.30, sz, 0.84, 0.06, 0.68, 0x212833);
+        // Tiny orange crabs / fish cubes inside
+        matteCol.addCube(tx - 0.16, ty - 0.15, sz - 0.15, 0.12, 0xff5e2b);
+        matteCol.addCube(tx + 0.18, ty + 0.04, sz - 0.22, 0.10, 0xff8c42);
+      }
+    }
+    // Red plastic seafood buckets on sidewalk
+    matteCol.add(sx + 0.85, sy + 0.20, sz - 0.15, 0.38, 0.40, 0.38, 0xd43030);
+    matteCol.add(sx + 1.32, sy + 0.18, sz - 0.05, 0.34, 0.36, 0.34, 0x246bc9);
+
+    // Outdoor Dai Pai Dong Eating Tables (spill-out zone right beside Stall 4!)
+    addFoldingTable(-5.3, sy, 3.65, 1.25, 0.95, 0x225ca8);
+    addTableMealProps(-5.3, sy + 0.75, 3.65, rng);
+    addSteamEmitter(-5.4, sy + 0.92, 3.55, { count: 7, spread: 0.15, height: 1.0, baseSize: 0.09, speed: 0.7 });
+    addRedPlasticStool(-6.15, sy, 3.65);
+    addRedPlasticStool(-4.45, sy, 3.65);
+    addRedPlasticStool(-5.3, sy, 4.35);
+
+    addFoldingTable(-3.1, sy, 3.75, 1.2, 0.95, 0xc73636);
+    addTableMealProps(-3.1, sy + 0.75, 3.75, rng);
+    addRedPlasticStool(-3.1, sy, 3.05);
+    addRedPlasticStool(-2.25, sy, 3.75);
+  }
+
+  // --------------------------------------------------------------------------
+  // STALL 5: Lemon Tea, Tropical Fruit & QR Payment Stand (South-Center: x = +1.0, z = +4.35)
+  // --------------------------------------------------------------------------
+  {
+    const sx = 1.0, sy = 0.22, sz = 4.35;
+    addAwning(-0.9, 3.0, 3.8, 2.5, 2.5, 3.1, -1, 0xf2cb2e, 0xffffff);
+    addHangingBulb(sx, 2.45, sz - 0.35, 0xfff08a, 2.6);
+
+    // Bright pastel yellow & mint counter
+    matteCol.fillCubes(sx - 1.45, sy, sz - 0.45, 12, 4, 4, 0.24, (ix, iy) => iy === 3 ? 0xf7f5eb : 0x2fb888, { jitter: 0.02 });
+    // Pink/Cyan LED under-counter strip
+    emissiveCol.add(sx, sy + 0.92, sz - 0.50, 2.7, 0.08, 0.06, new THREE.Color(0xff42b8).multiplyScalar(2.4));
+
+    // Crates of mangoes, dragonfruit, green limes
+    const fruits = [
+      { dx: -1.0, col: 0xffb824 },
+      { dx: -0.5, col: 0xe6297b },
+      { dx: 0.0, col: 0x52cc3d }
+    ];
+    for (const f of fruits) {
+      matteCol.add(sx + f.dx, sy + 1.04, sz - 0.2, 0.38, 0.16, 0.38, 0x8f6239);
+      for (let i = 0; i < 4; i++) {
+        matteCol.addCube(sx + f.dx + (i % 2 - 0.5) * 0.14, sy + 1.15, sz - 0.2 + (Math.floor(i / 2) - 0.5) * 0.14, 0.11, f.col);
+      }
+    }
+    // WeChat/Alipay QR payment standee on counter (glowing white-green/blue cube!)
+    matteCol.add(sx + 0.65, sy + 1.06, sz - 0.32, 0.18, 0.22, 0.06, 0xf5f5f5);
+    emissiveCol.addCube(sx + 0.65, sy + 1.09, sz - 0.36, 0.11, new THREE.Color(0x2ce66b).multiplyScalar(1.8));
+    // Cup stack & blender
+    matteCol.add(sx + 1.05, sy + 1.18, sz - 0.1, 0.18, 0.42, 0.18, 0xdbf4ff);
+  }
+
+  // --------------------------------------------------------------------------
+  // STALL 6: Claypot Rice & Late-Night Noodles (South-East: x = +9.8, z = +4.2)
+  // --------------------------------------------------------------------------
+  {
+    const sx = 9.8, sy = 0.22, sz = 4.2;
+    addAwning(7.8, 3.0, 4.0, 2.5, 2.5, 3.1, -1, 0xe85a2a, 0x262b38);
+    addHangingBulb(sx - 0.5, 2.45, sz - 0.35, 0xffaa44, 2.9);
+
+    metalCol.fillCubes(sx - 1.35, sy, sz - 0.45, 11, 4, 4, 0.24, 0x5c6473, { jitter: 0.02 });
+    // 4 claypots sizzling on glowing orange burners!
+    for (let i = 0; i < 4; i++) {
+      const cx = sx - 0.95 + i * 0.58;
+      emissiveCol.add(cx, sy + 1.00, sz - 0.05, 0.30, 0.06, 0.30, new THREE.Color(0xff5a1f).multiplyScalar(2.4));
+      matteCol.add(cx, sy + 1.12, sz - 0.05, 0.36, 0.20, 0.36, 0x7d3a24);
+      matteCol.add(cx, sy + 1.24, sz - 0.05, 0.28, 0.07, 0.28, 0x99492d);
+      addSteamEmitter(cx, sy + 1.32, sz - 0.35, { count: 8, spread: 0.14, height: 1.5, baseSize: 0.10, speed: 0.85, outZ: -0.95 });
+    }
+
+    // Outdoor table + market parasol umbrella beside Stall 6
+    addFoldingTable(6.2, sy, 3.7, 1.2, 0.95, 0x286b58);
+    addTableMealProps(6.2, sy + 0.75, 3.7, rng);
+    addRedPlasticStool(5.4, sy, 3.7);
+    addRedPlasticStool(7.0, sy, 3.7);
+
+    // Market parasol umbrella over the table
+    metalCol.add(6.2, sy + 1.45, 4.35, 0.07, 2.8, 0.07, 0x7c8699);
+    for (let ux = -1.0; ux <= 1.0; ux += 0.25) {
+      for (let uz = -1.0; uz <= 1.0; uz += 0.25) {
+        if (ux * ux + uz * uz <= 1.15) {
+          const drop = (ux * ux + uz * uz) * 0.22;
+          const uCol = (Math.abs(Math.round(ux * 4)) + Math.abs(Math.round(uz * 4))) % 2 === 0 ? 0xd93838 : 0xeae8e0;
+          matteCol.add(6.2 + ux, sy + 2.82 - drop, 4.35 + uz, 0.25, 0.07, 0.25, uCol);
+        }
+      }
+    }
+  }
+}
+
+// ============================================================================
+// 9. PARKED PROPS, TREES, CRATES, BOLLARDS, CAT & SEWER STEAM
+// ============================================================================
+function buildPropsAndDetails() {
+  // Potted tropical palm / banana trees in wet ceramic planters
+  const plantSpots = [
+    [-16.2, 0.22, -4.6],
+    [13.4, 0.22, -4.5],
+    [-12.6, 0.22, 4.6],
+    [13.2, 0.22, 4.5]
+  ];
+  for (const [px, py, pz] of plantSpots) {
+    matteCol.add(px, py + 0.25, pz, 0.56, 0.50, 0.56, 0x6b3a2c);
+    matteCol.add(px, py + 0.65, pz, 0.18, 0.60, 0.18, 0x4d3a27);
+    // Lush voxel palm fronds
+    for (const [dx, dy, dz] of [[0, 0.4, 0], [0.35, 0.35, 0], [-0.35, 0.32, 0], [0, 0.35, 0.35], [0, 0.32, -0.35], [0.25, 0.5, 0.25], [-0.25, 0.48, -0.25]]) {
+      matteCol.addCube(px + dx, py + 0.85 + dy, pz + dz, 0.32, jitterColor(0x28783d, 0.05, px + dx, py + dy, pz + dz));
+    }
+  }
+
+  // Striped yellow-black traffic bollards at West & East street edges
+  for (const bx of [-16.6, 17.5]) {
+    for (const bz of [-2.8, 2.8]) {
+      matteCol.add(bx, 0.38, bz, 0.20, 0.76, 0.20, 0xd49c1a);
+      matteCol.add(bx, 0.58, bz, 0.21, 0.14, 0.21, 0x161922);
+    }
+  }
+
+  // Stacked plastic beer crates (blue & red) near alleys
+  for (const [cx, cz, col] of [[-14.2, -4.7, 0x1e55a6], [4.2, -4.8, 0xc92c2c], [12.5, 4.7, 0x1e55a6]]) {
+    matteCol.add(cx, 0.40, cz, 0.52, 0.36, 0.42, col);
+    matteCol.add(cx + 0.04, 0.76, cz - 0.02, 0.52, 0.36, 0.42, col);
+  }
+
+  // Subtle manhole vent steam on wet street (x = +3.5, z = -3.05)
+  addSteamEmitter(3.5, 0.05, -3.05, { count: 10, spread: 0.24, height: 1.8, baseSize: 0.14, color: 0xb0c8e8, speed: 0.65 });
+
+  // Fill North-West gap (x = -7.6 .. -4.4, z = -4.6) with Cold Drinks Vending Machine, Roasted Sweet Potato Drum & Leaning Bike!
+  {
+    const vx = -6.9, vy = 0.22, vz = -4.95;
+    metalCol.add(vx, vy + 0.95, vz, 1.05, 1.9, 0.72, 0x2a548f);
+    emissiveCol.add(vx - 0.12, vy + 1.25, vz + 0.38, 0.66, 0.95, 0.04, new THREE.Color(0xb8f2ff).multiplyScalar(1.35));
+    // Drink rows inside vending window
+    for (const dy of [0.95, 1.25, 1.55]) {
+      for (let dx = -0.32; dx <= 0.12; dx += 0.14) {
+        matteCol.addCube(vx + dx, vy + dy, vz + 0.41, 0.08, (Math.round(dx * 10 + dy * 5) % 2 === 0) ? 0xff4455 : 0x33dd77);
+      }
+    }
+    matteCol.add(vx - 0.10, vy + 0.40, vz + 0.37, 0.64, 0.28, 0.04, 0x10141f); // dispenser slot
+
+    // Charcoal Roasted Sweet Potato Drum (烤红薯桶) beside vending machine
+    const rx = -5.5, rz = -4.65;
+    metalCol.add(rx, vy + 0.52, rz, 0.62, 0.96, 0.62, 0x5c3e32);
+    metalCol.add(rx, vy + 1.02, rz, 0.68, 0.08, 0.68, 0x737d8c);
+    emissiveCol.add(rx, vy + 0.22, rz + 0.32, 0.22, 0.16, 0.04, new THREE.Color(0xff6b1a).multiplyScalar(2.4));
+    matteCol.addCube(rx - 0.12, vy + 1.12, rz, 0.16, 0x8f4620);
+    matteCol.addCube(rx + 0.12, vy + 1.12, rz + 0.06, 0.15, 0xa85224);
+    addSteamEmitter(rx, vy + 1.20, rz, { count: 8, spread: 0.16, height: 1.5, baseSize: 0.11, speed: 0.85, outZ: 0.4 });
+
+    // Leaning Voxel Bicycle at x = -4.5, z = -4.85
+    const bx = -4.5, bz = -4.95;
+    matteCol.add(bx - 0.42, vy + 0.24, bz, 0.46, 0.46, 0.08, 0x161922);
+    matteCol.add(bx + 0.42, vy + 0.24, bz, 0.46, 0.46, 0.08, 0x161922);
+    metalCol.add(bx, vy + 0.42, bz, 0.78, 0.08, 0.06, 0xd64538);
+    metalCol.add(bx + 0.32, vy + 0.56, bz, 0.07, 0.48, 0.06, 0xd64538);
+    metalCol.add(bx + 0.32, vy + 0.82, bz, 0.08, 0.06, 0.38, 0x8a95a8);
+    matteCol.add(bx - 0.15, vy + 0.64, bz, 0.20, 0.07, 0.12, 0x1e222b);
+  }
+
+  // Tiny voxel ginger/white street cat sitting near South-East seafood table!
+  {
+    const cx = 4.65, cy = 0.22, cz = 3.95;
+    matteCol.add(cx, cy + 0.11, cz, 0.18, 0.20, 0.28, 0xe88d38); // body
+    matteCol.add(cx, cy + 0.26, cz - 0.10, 0.16, 0.16, 0.16, 0xf29f4b); // head
+    matteCol.addCube(cx - 0.05, cy + 0.36, cz - 0.10, 0.05, 0xd97326); // ear L
+    matteCol.addCube(cx + 0.05, cy + 0.36, cz - 0.10, 0.05, 0xd97326); // ear R
+    matteCol.addCube(cx, cy + 0.08, cz + 0.16, 0.06, 0xf5f2eb); // white tail tip
+    matteCol.add(cx, cy + 0.18, cz + 0.18, 0.05, 0.18, 0.05, 0xe88d38); // upright tail
+  }
+}
+
+// ============================================================================
+// 10. VOXEL SCOOTERS (PARKED + CRUISING DELIVERY SCOOTERS WITH HEADLIGHTS)
+// ============================================================================
+function buildVoxelScooterModel({ bodyColor = 0x2675d9, hasDeliveryBox = false, isOn = true } = {}) {
+  const g = new THREE.Group();
+  const bodyM = new THREE.MeshStandardMaterial({ color: bodyColor, roughness: 0.32, metalness: 0.25 });
+  const darkM = new THREE.MeshStandardMaterial({ color: 0x161922, roughness: 0.85 });
+  const chromeM = new THREE.MeshStandardMaterial({ color: 0x9aa4b5, roughness: 0.25, metalness: 0.75 });
+
+  const addPart = (px, py, pz, sx, sy, sz, mat) => {
+    const m = new THREE.Mesh(sharedBoxGeo, mat);
+    m.position.set(px, py, pz);
+    m.scale.set(sx, sy, sz);
+    m.castShadow = true;
+    m.receiveShadow = true;
+    g.add(m);
+    return m;
+  };
+
+  // Scooter faces +X locally
+  // Front & rear tires
+  addPart(0.55, 0.20, 0, 0.38, 0.38, 0.16, darkM);
+  addPart(-0.52, 0.20, 0, 0.38, 0.38, 0.16, darkM);
+  // Floorboard & chassis
+  addPart(0.02, 0.26, 0, 0.95, 0.12, 0.34, darkM);
+  addPart(-0.35, 0.46, 0, 0.52, 0.28, 0.34, bodyM);
+  // Seat cushion
+  addPart(-0.28, 0.65, 0, 0.48, 0.10, 0.30, darkM);
+  // Front apron & steering stem
+  addPart(0.42, 0.56, 0, 0.24, 0.56, 0.30, bodyM);
+  addPart(0.40, 0.92, 0, 0.10, 0.24, 0.58, chromeM);
+  // Side mirrors
+  addPart(0.40, 1.08, -0.26, 0.08, 0.08, 0.08, darkM);
+  addPart(0.40, 1.08, 0.26, 0.08, 0.08, 0.08, darkM);
+
+  if (hasDeliveryBox) {
+    // Classic yellow Shenzhen food delivery box on back!
+    const boxM = new THREE.MeshStandardMaterial({ color: 0xf7be16, roughness: 0.4 });
+    addPart(-0.62, 0.92, 0, 0.42, 0.42, 0.42, boxM);
+  }
+
+  if (isOn) {
+    // Bright headlight & taillight
+    const headM = new THREE.MeshBasicMaterial({ color: new THREE.Color(0xfff5cc).multiplyScalar(3.4), toneMapped: false });
+    addPart(0.56, 0.72, 0, 0.08, 0.14, 0.16, headM);
+    const tailM = new THREE.MeshBasicMaterial({ color: new THREE.Color(0xff2222).multiplyScalar(2.8), toneMapped: false });
+    addPart(-0.63, 0.52, 0, 0.06, 0.09, 0.18, tailM);
+  } else {
+    const offHead = new THREE.MeshStandardMaterial({ color: 0x4b5566, roughness: 0.2 });
+    addPart(0.56, 0.72, 0, 0.08, 0.14, 0.16, offHead);
+  }
+
+  return g;
+}
+
+function buildScooters() {
+  // Parked scooters along sidewalks & 24H store
+  const parked = [
+    { x: -15.2, y: 0.22, z: -3.55, ry: 0.25, col: 0x2675d9, box: false },
+    { x: 14.3, y: 0.22, z: 3.7, ry: -2.9, col: 0xeb3f52, box: true },
+    { x: 15.8, y: 0.22, z: 3.85, ry: -2.6, col: 0x2cb895, box: false },
+    { x: 17.6, y: 0.22, z: -3.65, ry: 3.05, col: 0x454e5e, box: false }
+  ];
+  for (const s of parked) {
+    const m = buildVoxelScooterModel({ bodyColor: s.col, hasDeliveryBox: s.box, isOn: false });
+    m.position.set(s.x, s.y, s.z);
+    m.rotation.y = s.ry;
+    scene.add(m);
+  }
+  // Charging green LED plug near 24H store scooter
+  emissiveCol.addCube(15.8, 0.95, 5.38, 0.08, new THREE.Color(0x22ff77).multiplyScalar(2.4));
+
+  // Moving Scooter 1: Yellow-jacket delivery rider cruising Eastbound along z = +1.05
+  {
+    const s1 = buildVoxelScooterModel({ bodyColor: 0xf2b705, hasDeliveryBox: true, isOn: true });
+    const rider = createVoxelPerson({
+      jacketColor: 0xf7c318,
+      pantsColor: 0x1b2230,
+      hairColor: 0x222630,
+      hatColor: 0xf7c318, // yellow delivery helmet!
+      seated: true
+    });
+    rider.root.position.set(-0.22, 0.42, 0);
+    s1.add(rider.root);
+    // Real moving headlight illuminating wet asphalt & puddle reflections!
+    const headLight = new THREE.PointLight(0xffe7a8, 3.2, 6.5, 2.0);
+    headLight.position.set(1.1, 0.85, 0);
+    s1.add(headLight);
+    scene.add(s1);
+
+    animatedScooters.push({
+      group: s1,
+      update: (t) => {
+        // Cruises visibly across the entire market x = -21 -> +21 without grazing close lens!
+        const u = ((t + 3.5) % LOOP_DURATION) / LOOP_DURATION;
+        let x;
+        if (u < 0.60) {
+          const p = u / 0.60;
+          x = THREE.MathUtils.lerp(-22.0, 22.0, p);
+          s1.visible = Math.abs(x) < 20.6;
+        } else {
+          x = 25;
+          s1.visible = false;
+        }
+        const weave = Math.sin(x * 0.25) * 0.35;
+        s1.position.set(x, 0.0, 1.05 + weave);
+        s1.rotation.y = -Math.atan2(Math.cos(x * 0.25) * 0.35 * 0.25, 1.0);
+        s1.rotation.x = Math.cos(x * 0.25) * 0.05;
+      }
+    });
+  }
+
+  // Moving Scooter 2: Night commuter on cyan-blue scooter cruising Westbound along z = -1.15
+  {
+    const s2 = buildVoxelScooterModel({ bodyColor: 0x2892d7, hasDeliveryBox: false, isOn: true });
+    const rider = createVoxelPerson({
+      jacketColor: 0x2f3b54,
+      pantsColor: 0x181c26,
+      hairColor: 0x141418,
+      hatColor: 0xe6edf5, // white scooter helmet
+      seated: true
+    });
+    rider.root.position.set(-0.22, 0.42, 0);
+    s2.add(rider.root);
+    const headLight = new THREE.PointLight(0xd9f2ff, 2.8, 6.0, 2.0);
+    headLight.position.set(1.1, 0.85, 0);
+    s2.add(headLight);
+    scene.add(s2);
+
+    animatedScooters.push({
+      group: s2,
+      update: (t) => {
+        const u = ((t + 20.0) % LOOP_DURATION) / LOOP_DURATION;
+        let x;
+        if (u < 0.60) {
+          const p = u / 0.60;
+          x = THREE.MathUtils.lerp(22.0, -22.0, p);
+          s2.visible = Math.abs(x) < 20.6;
+        } else {
+          x = -25;
+          s2.visible = false;
+        }
+        const weave = Math.sin(x * 0.22 + 1.0) * 0.32;
+        s2.position.set(x, 0.0, -1.15 + weave);
+        s2.rotation.y = Math.PI + Math.atan2(Math.cos(x * 0.22 + 1.0) * 0.32 * 0.22, 1.0);
+      }
+    });
+  }
+}
+
+// ============================================================================
+// 11. VOXEL PEOPLE (EATING, BARGAINING, COOKING, STROLLING WITH UMBRELLAS)
+// ============================================================================
+function createVoxelPerson({
+  skinColor = 0xe8bc96,
+  hairColor = 0x181920,
+  jacketColor = 0x3b6ea5,
+  pantsColor = 0x222836,
+  hatColor = null,
+  apronColor = null,
+  seated = false,
+  hasChopsticks = false,
+  hasBowl = false,
+  hasSpatula = false,
+  hasUmbrella = null,
+  hasPhone = false
+} = {}) {
+  const root = new THREE.Group();
+  const skinM = new THREE.MeshStandardMaterial({ color: skinColor, roughness: 0.72 });
+  const hairM = new THREE.MeshStandardMaterial({ color: hairColor, roughness: 0.85 });
+  const jacketM = new THREE.MeshStandardMaterial({ color: jacketColor, roughness: 0.75 });
+  const pantsM = new THREE.MeshStandardMaterial({ color: pantsColor, roughness: 0.8 });
+
+  const makeBox = (sx, sy, sz, mat) => {
+    const m = new THREE.Mesh(sharedBoxGeo, mat);
+    m.scale.set(sx, sy, sz);
+    m.castShadow = true;
+    m.receiveShadow = true;
+    return m;
+  };
+
+  // Legs
+  const legL = new THREE.Group();
+  const legR = new THREE.Group();
+  const legMeshL = makeBox(0.14, seated ? 0.34 : 0.48, 0.16, pantsM);
+  const legMeshR = makeBox(0.14, seated ? 0.34 : 0.48, 0.16, pantsM);
+  if (seated) {
+    legMeshL.position.set(0.10, -0.14, 0.09);
+    legMeshR.position.set(0.10, -0.14, -0.09);
+    legL.position.set(0, 0.42, 0);
+    legR.position.set(0, 0.42, 0);
+  } else {
+    legMeshL.position.set(0, -0.24, 0.09);
+    legMeshR.position.set(0, -0.24, -0.09);
+    legL.position.set(0, 0.48, 0);
+    legR.position.set(0, 0.48, 0);
+  }
+  legL.add(legMeshL);
+  legR.add(legMeshR);
+  root.add(legL, legR);
+
+  // Torso (faces +X locally)
+  const torso = new THREE.Group();
+  torso.position.set(0, seated ? 0.44 : 0.48, 0);
+  const chest = makeBox(0.24, 0.46, 0.34, jacketM);
+  chest.position.set(0, 0.23, 0);
+  torso.add(chest);
+
+  if (apronColor) {
+    const apron = makeBox(0.06, 0.56, 0.28, new THREE.MeshStandardMaterial({ color: apronColor, roughness: 0.75 }));
+    apron.position.set(0.12, 0.14, 0);
+    torso.add(apron);
+  }
+
+  // Head
+  const head = new THREE.Group();
+  head.position.set(0, 0.50, 0);
+  const skull = makeBox(0.28, 0.28, 0.28, skinM);
+  skull.position.set(0, 0.14, 0);
+  head.add(skull);
+
+  const hair = makeBox(0.30, 0.12, 0.30, hairM);
+  hair.position.set(-0.01, 0.25, 0);
+  head.add(hair);
+  const backHair = makeBox(0.08, 0.22, 0.30, hairM);
+  backHair.position.set(-0.13, 0.16, 0);
+  head.add(backHair);
+
+  if (hatColor) {
+    const hatM = new THREE.MeshStandardMaterial({ color: hatColor, roughness: 0.55 });
+    const hat = makeBox(0.33, 0.15, 0.33, hatM);
+    hat.position.set(0.01, 0.27, 0);
+    head.add(hat);
+    const brim = makeBox(0.14, 0.04, 0.28, hatM);
+    brim.position.set(0.17, 0.21, 0);
+    head.add(brim);
+  }
+  torso.add(head);
+
+  // Arms (right = +Z, left = -Z)
+  const armR = new THREE.Group();
+  armR.position.set(0, 0.40, 0.22);
+  const armMeshR = makeBox(0.13, 0.36, 0.13, jacketM);
+  armMeshR.position.set(0, -0.15, 0);
+  armR.add(armMeshR);
+
+  const armL = new THREE.Group();
+  armL.position.set(0, 0.40, -0.22);
+  const armMeshL = makeBox(0.13, 0.36, 0.13, jacketM);
+  armMeshL.position.set(0, -0.15, 0);
+  armL.add(armMeshL);
+
+  if (hasChopsticks) {
+    const stick = makeBox(0.24, 0.025, 0.025, new THREE.MeshStandardMaterial({ color: 0xd13838 }));
+    stick.position.set(0.14, -0.30, 0);
+    armR.add(stick);
+  }
+  if (hasBowl) {
+    const bowl = makeBox(0.18, 0.09, 0.18, new THREE.MeshStandardMaterial({ color: 0xf4f2eb }));
+    bowl.position.set(0.12, -0.32, 0.06);
+    armL.add(bowl);
+  }
+  if (hasSpatula) {
+    const handle = makeBox(0.34, 0.04, 0.05, new THREE.MeshStandardMaterial({ color: 0x9aa4b5, metalness: 0.7 }));
+    handle.position.set(0.20, -0.30, 0);
+    armR.add(handle);
+  }
+  if (hasPhone) {
+    const phone = makeBox(0.04, 0.13, 0.08, new THREE.MeshBasicMaterial({ color: new THREE.Color(0x9beaff).multiplyScalar(2.0), toneMapped: false }));
+    phone.position.set(0.10, -0.30, 0);
+    armR.add(phone);
+  }
+  if (hasUmbrella) {
+    // Keep umbrella pole & canopy strictly upright over head while hand reaches forward to hold grip
+    const umbHolder = new THREE.Group();
+    umbHolder.position.set(0.18, 0.22, 0.22);
+    const pole = makeBox(0.038, 0.88, 0.038, new THREE.MeshStandardMaterial({ color: 0x7b8699 }));
+    pole.position.set(0, 0.42, 0);
+    umbHolder.add(pole);
+    const umbGroup = new THREE.Group();
+    umbGroup.position.set(0, 0.88, 0);
+    const umbMat = new THREE.MeshStandardMaterial({ color: hasUmbrella, roughness: 0.35 });
+    const canopy = makeBox(0.86, 0.08, 0.86, umbMat);
+    const canopyTop = makeBox(0.54, 0.07, 0.54, umbMat);
+    canopyTop.position.set(0, 0.07, 0);
+    umbGroup.add(canopy, canopyTop);
+    umbHolder.add(umbGroup);
+    torso.add(umbHolder);
+  }
+
+  torso.add(armR, armL);
+  root.add(torso);
+  scene.add(root);
+
+  return { root, torso, head, armL, armR, legL, legR };
+}
+
+function buildLivingCharacters() {
+  // 1. Wok Chef at Stall 1 (facing the wok, tossing stir-fry!)
+  {
+    const p = createVoxelPerson({
+      jacketColor: 0xe6e8ee,
+      apronColor: 0x27446e,
+      hatColor: 0xf4f5f8,
+      hasSpatula: true
+    });
+    p.root.position.set(-10.8, 0.22, -4.95);
+    p.root.rotation.y = -Math.PI * 0.5;
+    animatedPeople.push((t) => {
+      const s = Math.sin(t * TAU / 1.5);
+      p.armR.rotation.z = 0.85 + s * 0.42;
+      p.armL.rotation.z = 0.65 - s * 0.18;
+      p.torso.rotation.z = s * 0.06;
+    });
+  }
+
+  // 2. BBQ Grill Master at Stall 2 (fanning/brushing oysters & skewers!)
+  {
+    const p = createVoxelPerson({
+      jacketColor: 0x262934,
+      apronColor: 0xb8352e,
+      hatColor: 0x1e222b,
+      hasSpatula: true
+    });
+    p.root.position.set(-1.7, 0.22, -4.98);
+    p.root.rotation.y = -Math.PI * 0.5;
+    animatedPeople.push((t) => {
+      const s = Math.sin(t * TAU / 2.0);
+      p.armR.rotation.z = 0.78 + s * 0.38;
+      p.armR.rotation.x = Math.cos(t * TAU / 2.0) * 0.22;
+      p.head.rotation.z = -0.15 + Math.sin(t * TAU / 3.0) * 0.08;
+    });
+  }
+
+  // 3. Bargaining Pair in front of Oyster Grill (`маленькие люди торгуются`, x = -0.6 & +0.15, z = -3.45)!
+  {
+    const vendor = createVoxelPerson({
+      jacketColor: 0xd9483b,
+      apronColor: 0xf0ece1,
+      hatColor: 0x2a303d
+    });
+    vendor.root.position.set(-0.45, 0.22, -3.65);
+    vendor.root.rotation.y = -0.25;
+
+    const customer = createVoxelPerson({
+      jacketColor: 0x3b8c88,
+      pantsColor: 0x1d2330,
+      hairColor: 0x1b1d26
+    });
+    customer.root.position.set(0.35, 0.22, -3.55);
+    customer.root.rotation.y = Math.PI - 0.15;
+
+    animatedPeople.push((t) => {
+      const c1 = Math.sin(t * TAU / 2.5);
+      const c2 = Math.cos(t * TAU / 2.5);
+      // Expressive hand bargaining gestures back & forth!
+      vendor.armR.rotation.z = 0.65 + Math.max(0, c1) * 0.75;
+      vendor.armL.rotation.z = 0.45 + Math.max(0, -c1) * 0.45;
+      vendor.head.rotation.y = c2 * 0.22;
+      vendor.torso.rotation.z = c1 * 0.08;
+
+      customer.armR.rotation.z = 0.72 + Math.max(0, -c1) * 0.85;
+      customer.head.rotation.z = -c1 * 0.12;
+      customer.torso.rotation.z = -c1 * 0.09;
+    });
+  }
+
+  // 4. Steamer Vendor at Stall 3 (x = 7.4, z = -4.9)
+  {
+    const p = createVoxelPerson({
+      jacketColor: 0x457d64,
+      apronColor: 0xebe6da,
+      hatColor: 0xebe6da
+    });
+    p.root.position.set(7.4, 0.22, -4.95);
+    p.root.rotation.y = -Math.PI * 0.5;
+    animatedPeople.push((t) => {
+      p.armR.rotation.z = 0.55 + Math.sin(t * TAU / 3.0) * 0.25;
+      p.head.rotation.y = Math.sin(t * TAU / 5.0) * 0.25;
+    });
+  }
+
+  // 5. Seated Diners Eating at South-West Tables (`маленькие люди едят`, x = -6.15, -4.45, -3.1, -2.25)
+  {
+    const d1 = createVoxelPerson({
+      jacketColor: 0xe07b38,
+      seated: true,
+      hasChopsticks: true,
+      hasBowl: true
+    });
+    d1.root.position.set(-6.12, 0.22, 3.65);
+    d1.root.rotation.y = 0.08;
+
+    const d2 = createVoxelPerson({
+      jacketColor: 0x4b6da8,
+      seated: true,
+      hasChopsticks: true
+    });
+    d2.root.position.set(-4.48, 0.22, 3.65);
+    d2.root.rotation.y = Math.PI - 0.1;
+
+    const d3 = createVoxelPerson({
+      jacketColor: 0xc9426b,
+      seated: true,
+      hasBowl: true,
+      hasChopsticks: true
+    });
+    d3.root.position.set(-3.1, 0.22, 3.08);
+    d3.root.rotation.y = -Math.PI * 0.5;
+
+    const d4 = createVoxelPerson({
+      jacketColor: 0x5f8f54,
+      seated: true,
+      hasPhone: true
+    });
+    d4.root.position.set(-2.28, 0.22, 3.75);
+    d4.root.rotation.y = Math.PI;
+
+    animatedPeople.push((t) => {
+      // Rhythmic chopstick lifting to mouth + leaning + nodding!
+      const e1 = Math.max(0, Math.sin(t * TAU / 2.5));
+      d1.armR.rotation.z = 0.65 + e1 * 0.78;
+      d1.armL.rotation.z = 0.75 + e1 * 0.15;
+      d1.head.rotation.z = -e1 * 0.24;
+
+      const e2 = Math.max(0, Math.sin(t * TAU / 3.0 + 1.2));
+      d2.armR.rotation.z = 0.62 + e2 * 0.72;
+      d2.head.rotation.z = -e2 * 0.22;
+      d2.torso.rotation.x = Math.sin(t * TAU / 5.0) * 0.08;
+
+      const e3 = Math.max(0, Math.sin(t * TAU / 2.5 + 2.0));
+      d3.armR.rotation.z = 0.68 + e3 * 0.74;
+      d3.armL.rotation.z = 0.80;
+      d3.head.rotation.z = -e3 * 0.20;
+
+      d4.armR.rotation.z = 0.90 + Math.sin(t * TAU / 6.0) * 0.10;
+      d4.head.rotation.z = -0.25 + Math.sin(t * TAU / 6.0) * 0.06;
+    });
+  }
+
+  // 6. Lemon Tea Stand: Vendor + Customer Scanning QR Code + Bargaining Friend
+  {
+    const teaVendor = createVoxelPerson({
+      jacketColor: 0xf0ca32,
+      apronColor: 0x1e6b54,
+      hatColor: 0x1e6b54
+    });
+    teaVendor.root.position.set(1.0, 0.22, 4.92);
+    teaVendor.root.rotation.y = Math.PI * 0.5;
+
+    const qrBuyer = createVoxelPerson({
+      jacketColor: 0xd9628d,
+      hasPhone: true
+    });
+    qrBuyer.root.position.set(1.55, 0.22, 3.55);
+    qrBuyer.root.rotation.y = -Math.PI * 0.5;
+
+    const haggler = createVoxelPerson({
+      jacketColor: 0x3f88b8
+    });
+    haggler.root.position.set(0.35, 0.22, 3.52);
+    haggler.root.rotation.y = -Math.PI * 0.52;
+
+    animatedPeople.push((t) => {
+      teaVendor.armR.rotation.z = 0.6 + Math.sin(t * TAU / 2.5) * 0.35;
+      teaVendor.head.rotation.y = Math.sin(t * TAU / 5.0) * 0.25;
+      qrBuyer.armR.rotation.z = 1.05 + Math.sin(t * TAU / 3.0) * 0.18;
+      haggler.armR.rotation.z = 0.7 + Math.max(0, Math.cos(t * TAU / 2.5)) * 0.6;
+      haggler.head.rotation.y = Math.sin(t * TAU / 3.0) * 0.18;
+    });
+  }
+
+  // 7. Seated Couple Under Parasol at South-East Claypot Stall
+  {
+    const sA = createVoxelPerson({ jacketColor: 0x8f4694, seated: true, hasChopsticks: true, hasBowl: true });
+    sA.root.position.set(5.42, 0.22, 3.7);
+    sA.root.rotation.y = 0.0;
+    const sB = createVoxelPerson({ jacketColor: 0x3b6891, seated: true, hasChopsticks: true });
+    sB.root.position.set(6.98, 0.22, 3.7);
+    sB.root.rotation.y = Math.PI;
+    animatedPeople.push((t) => {
+      const eat = Math.max(0, Math.sin(t * TAU / 3.0 + 0.5));
+      sA.armR.rotation.z = 0.65 + eat * 0.72;
+      sA.head.rotation.z = -eat * 0.2;
+      sB.armR.rotation.z = 0.55 + Math.max(0, Math.cos(t * TAU / 2.5)) * 0.65;
+      sB.head.rotation.y = Math.sin(t * TAU / 5.0) * 0.15;
+    });
+  }
+
+  // 8. Two Strolling Pedestrians with Wet Rain Umbrellas (walking cleanly along curb shoulder y=0.0, zero collisions!)
+  {
+    const w1 = createVoxelPerson({ jacketColor: 0x4fa6a6, hasUmbrella: 0xffe44d });
+    animatedPeople.push((t) => {
+      const u = (t % LOOP_DURATION) / LOOP_DURATION;
+      const forward = u < 0.5;
+      const p = forward ? u * 2.0 : (1.0 - (u - 0.5) * 2.0);
+      const x = THREE.MathUtils.lerp(-14.5, 12.5, p);
+      w1.root.position.set(x, 0.0, -2.55);
+      w1.root.rotation.y = forward ? 0 : Math.PI;
+      const step = Math.sin(t * TAU * 1.4);
+      w1.legL.rotation.z = step * 0.45;
+      w1.legR.rotation.z = -step * 0.45;
+      w1.armL.rotation.z = -step * 0.25;
+      w1.armR.rotation.z = 0.52;
+    });
+
+    const w2 = createVoxelPerson({ jacketColor: 0xd94c68, hasUmbrella: 0x3ec5ff });
+    animatedPeople.push((t) => {
+      const u = ((t + 8.0) % LOOP_DURATION) / LOOP_DURATION;
+      const forward = u < 0.5;
+      const p = forward ? u * 2.0 : (1.0 - (u - 0.5) * 2.0);
+      const x = THREE.MathUtils.lerp(13.5, -11.5, p);
+      w2.root.position.set(x, 0.0, 2.50);
+      w2.root.rotation.y = forward ? Math.PI : 0;
+      const step = Math.sin(t * TAU * 1.4 + 1.0);
+      w2.legL.rotation.z = step * 0.42;
+      w2.legR.rotation.z = -step * 0.42;
+      w2.armL.rotation.z = -step * 0.22;
+      w2.armR.rotation.z = 0.52;
+    });
+  }
+}
+
+// ============================================================================
+// 12. ANIMATED STEAM PUFFS & POST-RAIN ROOFTOP DRIP SYSTEM (INSTANCED CUBES)
+// ============================================================================
+let steamInstancedMesh = null;
+let steamParticles = [];
+let dropInstancedMesh = null;
+let dropParticles = [];
+let sparkInstancedMesh = null;
+let sparkParticles = [];
+
+function buildParticleVoxelSystems() {
+  const rng = createRng(9912);
+  for (const em of animatedSteamEmitters) {
+    for (let i = 0; i < em.count; i++) {
+      steamParticles.push({
+        em,
+        seed: i / em.count,
+        ox: (rng() - 0.5) * em.spread,
+        oz: (rng() - 0.5) * em.spread,
+        driftA: rng() * TAU,
+        rotSpeed: (rng() - 0.5) * 2.0
+      });
+    }
+  }
+  const steamMat = new THREE.MeshStandardMaterial({
+    color: 0xeef4ff,
+    emissive: 0x455a78,
+    emissiveIntensity: 0.38,
+    roughness: 0.92,
+    transparent: true,
+    opacity: 0.36,
+    depthWrite: false
+  });
+  steamInstancedMesh = new THREE.InstancedMesh(sharedBoxGeo, steamMat, steamParticles.length);
+  steamInstancedMesh.frustumCulled = false;
+  scene.add(steamInstancedMesh);
+
+  // Post-rain drips falling from awning edges directly onto puddle coordinates!
+  const dropSpots = [
+    { x: -9.5, z: -1.6, topY: 2.52 },
+    { x: -2.2, z: 0.8, topY: 4.95 },
+    { x: 4.4, z: -1.1, topY: 4.85 },
+    { x: 10.8, z: 1.2, topY: 2.50 },
+    { x: -14.2, z: 0.4, topY: 4.90 },
+    { x: 0.6, z: -2.0, topY: 2.55 }
+  ];
+  const periods = [2.5, 3.0, 2.5, 3.0, 2.5, 3.0];
+  const offsets = [0.2, 1.1, 0.7, 2.1, 1.6, 0.4];
+  dropSpots.forEach((ds, idx) => {
+    dropParticles.push({ ...ds, period: periods[idx], offset: offsets[idx] });
+  });
+  const dropMat = new THREE.MeshBasicMaterial({
+    color: new THREE.Color(0x9ee8ff).multiplyScalar(1.6),
+    transparent: true,
+    opacity: 0.85,
+    toneMapped: false
+  });
+  dropInstancedMesh = new THREE.InstancedMesh(sharedBoxGeo, dropMat, dropParticles.length);
+  scene.add(dropInstancedMesh);
+
+  // Glowing BBQ charcoal ember sparks & Wok sparks!
+  for (let i = 0; i < 24; i++) {
+    const isWok = i < 8;
+    sparkParticles.push({
+      x: (isWok ? -10.9 : -1.5) + (rng() - 0.5) * (isWok ? 0.5 : 2.3),
+      y: isWok ? 1.65 : 1.32,
+      z: (isWok ? -4.2 : -4.2) + (rng() - 0.5) * 0.4,
+      seed: i / 24,
+      height: 0.9 + rng() * 0.9,
+      drift: (rng() - 0.5) * 0.35
+    });
+  }
+  const sparkMat = new THREE.MeshBasicMaterial({
+    color: new THREE.Color(0xff7722).multiplyScalar(3.2),
+    toneMapped: false
+  });
+  sparkInstancedMesh = new THREE.InstancedMesh(sharedBoxGeo, sparkMat, sparkParticles.length);
+  sparkInstancedMesh.frustumCulled = false;
+  scene.add(sparkInstancedMesh);
+}
+
+// ============================================================================
+// 13. LIGHTING SETUP (NO SHADOW BLOAT, CRISP CONTRAST)
+// ============================================================================
+function buildLights() {
+  const hemi = new THREE.HemisphereLight(0x3a5d99, 0x201828, 1.15);
+  scene.add(hemi);
+
+  const moon = new THREE.DirectionalLight(0x95b8ff, 1.25);
+  moon.position.set(-14, 24, 16);
+  moon.castShadow = true;
+  moon.shadow.mapSize.set(2048, 2048);
+  moon.shadow.camera.near = 2;
+  moon.shadow.camera.far = 65;
+  moon.shadow.camera.left = -24;
+  moon.shadow.camera.right = 24;
+  moon.shadow.camera.top = 18;
+  moon.shadow.camera.bottom = -18;
+  moon.shadow.bias = -0.0008;
+  scene.add(moon);
+
+  // Subtle diorama rim fill light from SE sky so outer cutaway edges & rooftops sculpt nicely
+  const rimLight = new THREE.DirectionalLight(0x5273b8, 0.55);
+  rimLight.position.set(18, 16, 22);
+  scene.add(rimLight);
+
+  // Key non-shadow point lights for emotional pools of light
+  const poolLights = [
+    { x: -17.5, y: 4.8, z: 0.0, col: 0xff4578, int: 7.5, dist: 12.0 },   // West Archway pink neon
+    { x: -10.5, y: 2.3, z: -3.4, col: 0xffa838, int: 8.5, dist: 9.0, flicker: true }, // Wok Cart warm tungsten
+    { x: -6.2, y: 2.0, z: -3.7, col: 0x9ceeff, int: 4.5, dist: 5.5 },   // Cold Drinks Vending & Sweet Potato Drum
+    { x: -1.5, y: 2.3, z: -3.4, col: 0xff7028, int: 8.5, dist: 9.2, flicker: true },  // Oyster BBQ warm fire
+    { x: -0.1, y: 2.1, z: -3.2, col: 0xffcf78, int: 5.5, dist: 6.5 },    // Bargaining pair warm spotlight!
+    { x: 7.5, y: 2.5, z: -3.5, col: 0xffc052, int: 7.5, dist: 8.8 },     // Steamer Dim Sum warm glow
+    { x: -8.5, y: 2.0, z: 3.4, col: 0x24dcff, int: 7.5, dist: 8.8 },     // Aqua Seafood Tanks
+    { x: -4.2, y: 2.2, z: 3.4, col: 0xffbb66, int: 7.2, dist: 7.5 },     // Dai Pai Dong diners eating warm light!
+    { x: 1.0, y: 2.5, z: 3.4, col: 0xff62e8, int: 7.0, dist: 8.5 },      // Tea Stand neon pink-gold
+    { x: 6.2, y: 2.3, z: 3.5, col: 0xffbe6b, int: 5.8, dist: 6.8 },      // Claypot eating couple warm light
+    { x: 9.8, y: 2.4, z: 3.5, col: 0xff9a33, int: 7.0, dist: 8.5 },      // Claypot Rice warm stall
+    { x: 16.2, y: 2.3, z: 4.5, col: 0x82ebff, int: 7.0, dist: 8.8 },     // 24H Store cool cyan
+    // Upper neon facade washes
+    { x: -6.5, y: 5.5, z: -2.0, col: 0xff3b78, int: 6.0, dist: 12.5 },
+    { x: 3.2, y: 5.2, z: -2.0, col: 0x24ff9e, int: 5.5, dist: 12.0 },
+    { x: -1.5, y: 7.2, z: -2.5, col: 0xff3864, int: 6.0, dist: 12.5 },
+    { x: 7.4, y: 7.2, z: -2.5, col: 0xffbf2e, int: 5.5, dist: 12.0 }
+  ];
+
+  for (const pl of poolLights) {
+    const light = new THREE.PointLight(pl.col, pl.int, pl.dist, 1.85);
+    light.position.set(pl.x, pl.y, pl.z);
+    scene.add(light);
+    if (pl.flicker) {
+      animatedFlickerLights.push({ light, baseInt: pl.int, phase: pl.x * 0.7 });
+    }
+  }
+}
+
+// ============================================================================
+// 14. ASSEMBLE SCENE
+// ============================================================================
+buildDioramaPlinthAndStreet();
+buildBuildingsAndArchitecture();
+buildNeonAndOverheadWires();
+buildAllStalls();
+buildPropsAndDetails();
+buildScooters();
+buildLivingCharacters();
+buildParticleVoxelSystems();
+buildLights();
+
+// Finalize static instanced meshes
+const matteMesh = matteCol.buildInstancedMesh(matteMat);
+const metalMesh = metalCol.buildInstancedMesh(metalMat);
+const emissiveMesh = emissiveCol.buildInstancedMesh(emissiveMat, { castShadow: false, receiveShadow: false });
+const wetGroundMesh = wetGroundCol.buildInstancedMesh(wetGroundMat, {
+  castShadow: false,
+  receiveShadow: true,
+  extraAttrName: 'aWetType'
+});
+const plinthMesh = plinthCol.buildInstancedMesh(plinthMat, { castShadow: false, receiveShadow: true });
+
+if (matteMesh) scene.add(matteMesh);
+if (metalMesh) scene.add(metalMesh);
+if (emissiveMesh) scene.add(emissiveMesh);
+if (wetGroundMesh) scene.add(wetGroundMesh);
+if (plinthMesh) scene.add(plinthMesh);
+
+// ============================================================================
+// 15. 30-SECOND SEAMLESS LOOPED CAMERA SPLINE & KEY 'C' FREE-CAM TOGGLE
+// ============================================================================
+// Carefully cleared collision-free closed spline through the Shenzhen market!
+const camWaypoints = [
+  new THREE.Vector3(-23.5, 11.8, 17.5), // Hero diorama overview (SW) — open view over low South kiosks!
+  new THREE.Vector3(-24.2, 3.2, 0.4),   // Aligned directly in front of the "深圳夜市" archway (zero pillar clip!)
+  new THREE.Vector3(-17.8, 2.45, 0.1),  // Thread cleanly under archway into the glowing wet street
+  new THREE.Vector3(-10.8, 2.05, 0.35), // Skim low over puddles past Wok Cart flame & approaching scooter
+  new THREE.Vector3(-4.2, 2.05, 0.55),  // Close pass past Oyster BBQ, bargaining pair & Dai Pai Dong diners
+  new THREE.Vector3(2.8, 2.15, -0.35),  // Pan across seated eaters, Aqua Tanks & Lemon Tea QR stand
+  new THREE.Vector3(10.5, 2.45, 0.1),   // Bamboo dim sum steamers, claypot rice, cat & 24H store
+  new THREE.Vector3(23.5, 3.2, 0.2),    // Exit cleanly East of corner building & pole before curving out!
+  new THREE.Vector3(24.5, 10.4, 11.2),  // Crane upward over East alley overhead wire web
+  new THREE.Vector3(13.5, 15.2, 18.8),  // High SE diorama panorama looking down into the full canyon
+  new THREE.Vector3(-5.0, 15.6, 19.6)   // High South panorama gliding back smoothly to SW hero start
+];
+
+const lookWaypoints = [
+  new THREE.Vector3(-1.0, 2.8, -0.6),
+  new THREE.Vector3(-8.0, 2.6, 0.0),
+  new THREE.Vector3(-5.0, 2.2, -0.5),
+  new THREE.Vector3(-7.0, 1.5, -2.5),
+  new THREE.Vector3(-1.2, 1.55, -2.1),
+  new THREE.Vector3(-2.5, 1.45, 2.8),
+  new THREE.Vector3(11.5, 2.2, 0.6),
+  new THREE.Vector3(8.0, 2.8, -0.4),
+  new THREE.Vector3(1.5, 3.0, -0.6),
+  new THREE.Vector3(0.0, 2.6, -0.6),
+  new THREE.Vector3(-1.0, 2.8, -0.6)
+];
+
+const camCurve = new THREE.CatmullRomCurve3(camWaypoints, true, 'centripetal', 0.5);
+const lookCurve = new THREE.CatmullRomCurve3(lookWaypoints, true, 'centripetal', 0.5);
+
+let isFreeCam = false;
+let controls = null;
+let blendBackAlpha = 1.0;
+const blendStartPos = new THREE.Vector3();
+const blendStartLook = new THREE.Vector3();
+const keysDown = new Set();
+
+function ensureControls() {
+  if (!controls) {
+    controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.07;
+    controls.minDistance = 1.5;
+    controls.maxDistance = 58;
+    controls.maxPolarAngle = Math.PI * 0.495;
+  }
+  return controls;
+}
+
+window.addEventListener('keydown', (e) => {
+  keysDown.add(e.code);
+  // KeyC works regardless of active keyboard layout (English 'C' or Russian 'С')
+  if (e.code === 'KeyC' && !e.repeat) {
+    isFreeCam = !isFreeCam;
+    if (isFreeCam) {
+      const ctrl = ensureControls();
+      const dir = new THREE.Vector3();
+      camera.getWorldDirection(dir);
+      // Place orbit target nicely in front of current view (or at street plane intersection)
+      const tPlane = camera.position.y > 0.5 && dir.y < -0.05
+        ? Math.min(18, Math.max(4, -camera.position.y / dir.y))
+        : 8.0;
+      ctrl.target.copy(camera.position).addScaledVector(dir, tPlane);
+      ctrl.enabled = true;
+      ctrl.update();
+    } else {
+      if (controls) controls.enabled = false;
+      blendBackAlpha = 0.0;
+      blendStartPos.copy(camera.position);
+      const dir = new THREE.Vector3();
+      camera.getWorldDirection(dir);
+      blendStartLook.copy(camera.position).addScaledVector(dir, 8.0);
+    }
+  }
+});
+
+window.addEventListener('keyup', (e) => {
+  keysDown.delete(e.code);
+});
+
+// ============================================================================
+// 16. ANIMATION LOOP, PLANAR REFLECTION PASS & WINDOW RESIZE
+// ============================================================================
+const dummy = new THREE.Object3D();
+const tmpPos = new THREE.Vector3();
+const tmpLook = new THREE.Vector3();
+const tmpDir = new THREE.Vector3();
+
+let simTime = 0;
+let lastPerf = performance.now();
+let frozenTime = null;
+
+function updateSceneAtTime(t) {
+  const loopT = ((t % LOOP_DURATION) + LOOP_DURATION) % LOOP_DURATION;
+  wetUniforms.uTime.value = loopT;
+
+  // Swaying lanterns (harmonic multiples of 2*pi/30 for seamless loop)
+  for (const l of animatedLanterns) {
+    l.pivot.rotation.z = Math.sin(loopT * TAU / 5.0 + l.phase) * 0.085;
+    l.pivot.rotation.x = Math.cos(loopT * TAU / 7.5 + l.phase * 1.3) * 0.055;
+  }
+
+  // Spinning AC fans
+  for (const f of animatedFans) {
+    f.group.rotation.z = (loopT / LOOP_DURATION) * TAU * f.speed * 4;
+  }
+
+  // Flickering wok & grill lights
+  for (const fl of animatedFlickerLights) {
+    const wave = Math.sin(loopT * TAU / 1.5 + fl.phase) * 0.12
+               + Math.sin(loopT * TAU / 0.75 + fl.phase * 2.1) * 0.06;
+    fl.light.intensity = fl.baseInt * (1.0 + wave);
+  }
+
+  // Custom dynamic groups (wok flame)
+  for (const fn of animatedDynamicGroups) fn(loopT);
+
+  // People & moving scooters
+  for (const fn of animatedPeople) fn(loopT);
+  for (const sc of animatedScooters) sc.update(loopT);
+
+  // Rising voxel steam puffs (exact periodic wrap via fract!) curving out from under awnings
+  for (let i = 0; i < steamParticles.length; i++) {
+    const p = steamParticles[i];
+    const period = 3.0 / p.em.speed;
+    const age = ((loopT / period + p.seed) % 1.0 + 1.0) % 1.0;
+    const rise = age * p.em.height;
+    const outCurve = (p.em.outZ || 0) * Math.sin(Math.min(1, age * 1.4) * Math.PI * 0.5);
+    const swirl = Math.sin(age * TAU + p.driftA) * (0.12 + age * 0.22);
+    const sz = p.em.baseSize * Math.sin(age * Math.PI) * (0.55 + age * 0.75);
+    dummy.position.set(
+      p.em.x + p.ox + swirl,
+      p.em.y + rise,
+      p.em.z + p.oz + outCurve + Math.cos(age * TAU + p.driftA) * 0.10
+    );
+    dummy.rotation.set(age * p.rotSpeed, age * p.rotSpeed * 1.3, 0);
+    dummy.scale.setScalar(Math.max(0.001, sz));
+    dummy.updateMatrix();
+    steamInstancedMesh.setMatrixAt(i, dummy.matrix);
+  }
+  steamInstancedMesh.instanceMatrix.needsUpdate = true;
+
+  // Post-rain awning drips synced with puddle ripple rings!
+  for (let i = 0; i < dropParticles.length; i++) {
+    const d = dropParticles[i];
+    const age = (((loopT + d.offset) / d.period) % 1.0 + 1.0) % 1.0;
+    // Droplet falls quickly in last 25% before age wraps to 0 (= ripple spawn!)
+    if (age > 0.72) {
+      const fall = (age - 0.72) / 0.28;
+      dummy.position.set(d.x, THREE.MathUtils.lerp(d.topY, 0.02, fall * fall), d.z);
+      dummy.scale.set(0.035, 0.09, 0.035);
+    } else {
+      dummy.position.set(d.x, d.topY, d.z);
+      const swell = (age / 0.72) * 0.04;
+      dummy.scale.set(swell, swell * 1.2, swell);
+    }
+    dummy.rotation.set(0, 0, 0);
+    dummy.updateMatrix();
+    dropInstancedMesh.setMatrixAt(i, dummy.matrix);
+  }
+  dropInstancedMesh.instanceMatrix.needsUpdate = true;
+
+  // BBQ & Wok ember sparks
+  if (sparkInstancedMesh) {
+    for (let i = 0; i < sparkParticles.length; i++) {
+      const sp = sparkParticles[i];
+      const age = ((loopT / 2.0 + sp.seed) % 1.0 + 1.0) % 1.0;
+      const sz = 0.045 * (1.0 - age);
+      dummy.position.set(
+        sp.x + Math.sin(age * TAU) * 0.08 + sp.drift * age,
+        sp.y + age * sp.height,
+        sp.z + Math.cos(age * TAU) * 0.08 + age * 0.25
+      );
+      dummy.scale.setScalar(Math.max(0.001, sz));
+      dummy.updateMatrix();
+      sparkInstancedMesh.setMatrixAt(i, dummy.matrix);
+    }
+    sparkInstancedMesh.instanceMatrix.needsUpdate = true;
+  }
+}
+
+function updateCamera(dt, t) {
+  const loopT = ((t % LOOP_DURATION) + LOOP_DURATION) % LOOP_DURATION;
+  const u = loopT / LOOP_DURATION;
+
+  if (!isFreeCam) {
+    camCurve.getPointAt(u, tmpPos);
+    lookCurve.getPointAt(u, tmpLook);
+    if (blendBackAlpha < 1.0) {
+      blendBackAlpha = Math.min(1.0, blendBackAlpha + dt / 0.8);
+      const ease = blendBackAlpha * blendBackAlpha * (3 - 2 * blendBackAlpha);
+      camera.position.lerpVectors(blendStartPos, tmpPos, ease);
+      const curLook = new THREE.Vector3().lerpVectors(blendStartLook, tmpLook, ease);
+      camera.lookAt(curLook);
+    } else {
+      camera.position.copy(tmpPos);
+      camera.lookAt(tmpLook);
+    }
+  } else if (controls) {
+    // Optional gentle WASD fly support while in Free Camera mode
+    const moveSpeed = (keysDown.has('ShiftLeft') || keysDown.has('ShiftRight') ? 16 : 8) * dt;
+    const fwd = new THREE.Vector3();
+    camera.getWorldDirection(fwd);
+    const right = new THREE.Vector3().crossVectors(fwd, camera.up).normalize();
+    const move = new THREE.Vector3();
+    if (keysDown.has('KeyW') || keysDown.has('ArrowUp')) move.add(fwd);
+    if (keysDown.has('KeyS') || keysDown.has('ArrowDown')) move.sub(fwd);
+    if (keysDown.has('KeyD') || keysDown.has('ArrowRight')) move.add(right);
+    if (keysDown.has('KeyA') || keysDown.has('ArrowLeft')) move.sub(right);
+    if (keysDown.has('KeyE')) move.y += 1;
+    if (keysDown.has('KeyQ')) move.y -= 1;
+    if (move.lengthSq() > 0) {
+      move.normalize().multiplyScalar(moveSpeed);
+      camera.position.add(move);
+      controls.target.add(move);
+    }
+    controls.update();
+  }
+}
+
+function renderPlanarReflection() {
+  wetUniforms.uCamPos.value.copy(camera.position);
+  if (camera.position.y <= 0.15) {
+    wetUniforms.uReflectEnable.value = 0.0;
+    return;
+  }
+  wetUniforms.uReflectEnable.value = THREE.MathUtils.clamp((camera.position.y - 0.15) * 2.0, 0.0, 1.0);
+
+  camera.getWorldDirection(tmpDir);
+  const targetX = camera.position.x + tmpDir.x * 10;
+  const targetY = camera.position.y + tmpDir.y * 10;
+  const targetZ = camera.position.z + tmpDir.z * 10;
+
+  reflectCamera.fov = camera.fov;
+  reflectCamera.aspect = camera.aspect;
+  reflectCamera.near = camera.near;
+  reflectCamera.far = camera.far;
+  reflectCamera.position.set(camera.position.x, -camera.position.y, camera.position.z);
+  reflectCamera.up.set(0, 1, 0);
+  reflectCamera.lookAt(targetX, -targetY, targetZ);
+  reflectCamera.updateMatrixWorld();
+  reflectCamera.updateProjectionMatrix();
+
+  reflectMatrix.multiplyMatrices(reflectCamera.projectionMatrix, reflectCamera.matrixWorldInverse);
+
+  // Hide ground & underground plinth during reflection pass so only above-ground lights/stalls reflect
+  if (wetGroundMesh) wetGroundMesh.visible = false;
+  if (plinthMesh) plinthMesh.visible = false;
+
+  const prevTarget = renderer.getRenderTarget();
+  renderer.setRenderTarget(reflectionRT);
+  renderer.clear();
+  renderer.render(scene, reflectCamera);
+  renderer.setRenderTarget(prevTarget);
+
+  if (wetGroundMesh) wetGroundMesh.visible = true;
+  if (plinthMesh) plinthMesh.visible = true;
+}
+
+function animate(now) {
+  requestAnimationFrame(animate);
+  const rawDt = Math.max(0.0001, (now - lastPerf) / 1000);
+  // Keep exact wall-clock 30s pacing even on slower devices, while ignoring >0.5s tab-switch stalls
+  const dt = rawDt > 0.5 ? 0.016 : rawDt;
+  lastPerf = now;
+
+  if (frozenTime === null) {
+    simTime += dt;
+  }
+  const activeT = frozenTime !== null ? frozenTime : simTime;
+
+  updateSceneAtTime(activeT);
+  updateCamera(dt, activeT);
+  renderPlanarReflection();
+  composer.render();
+}
+
+window.addEventListener('resize', () => {
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  renderer.setSize(w, h);
+  composer.setSize(w, h);
+  bloomPass.setSize(w, h);
+  reflectionRT.setSize(Math.max(256, Math.floor(w * 0.5)), Math.max(256, Math.floor(h * 0.5)));
+});
+
+// Support optional URL ?t=<seconds> or runtime stepping without adding any visible UI
+const urlT = new URLSearchParams(window.location.search).get('t');
+if (urlT !== null && !Number.isNaN(parseFloat(urlT))) {
+  frozenTime = parseFloat(urlT);
+}
+window.__diorama = {
+  setTime: (sec) => { frozenTime = sec; },
+  resume: () => { frozenTime = null; },
+  getState: () => ({ isFreeCam, camPos: camera.position.toArray(), loopT: (frozenTime ?? simTime) % LOOP_DURATION })
+};
+
+requestAnimationFrame(animate);
+</script>
+</body>
+</html>
