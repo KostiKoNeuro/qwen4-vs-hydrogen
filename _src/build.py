@@ -21,7 +21,7 @@ DATA = {
     2: {"q": ("39:18", 1.32, 1.05, None), "h": ("43:48", 2.92, 2.33, None)},
     3: {"q": ("102:18", 3.57, 2.94, 0.40), "h": ("65:48", 10.18, 8.37, 1.11)},
 }
-TOTAL = {"q": ("2:46:54", 5.67, 4.62), "h": ("2:39:48", 18.89, 15.34)}   # суммы по точным токенам (README)
+TOTAL = {"q": ("2:46:54", 5.68, 4.62), "h": ("2:39:48", 18.90, 15.34)}   # суммы строк DATA (так же в ролике: $5,68 / $18,90)
 BLIND_MAP = {"1": "q", "2": "h"}   # _logs/blind_map.json: "02": ["qwen4", "hyd"]
 
 
@@ -113,6 +113,33 @@ def test1():
 </article>'''
 
 
+BLIND_MAP3 = {"1": "q", "2": "h"}   # _logs/blind_map.json: "03": ["qwen4", "hyd"]; = «Заставка 1/2» в ролике и у SMM
+
+
+def blind_side(maps, v, label, media, notes, cta=""):
+    k = maps[v]
+    enc = base64.b64encode(f"{k}|{M[k]['name']}|{M[k]['maker']}|{M[k]['logo']}".encode()).decode()
+    head = who(k) if not BLIND else f'<div class="who"><div>{label} {v}<small>{rl("модель скрыта", "model hidden")}</small></div></div>'
+    return f'''
+    <div class="side {k if not BLIND else "b"}" data-v="{enc}">
+      {head}
+      {media}
+      <p class="note">{notes[v]}</p>
+      {cta}
+    </div>'''
+
+
+def blind_bar(n, maps, word_ru, word_en):
+    bymodel = "".join(f'''<div class="{k}"><span class="nm">{M[k]["name"]}</span>{clock(DATA[n][k][0])} · {usd(DATA[n][k][1])} <small>· CometAPI {usd(DATA[n][k][2])}{f" · {rl('ассеты', 'assets')} {usd(DATA[n][k][3])}" if DATA[n][k][3] else ""}</small></div>''' for k in "qh")
+    ans = rl(f"{word_ru} 1 — {M[maps['1']]['name']}, {word_ru.lower()} 2 — {M[maps['2']]['name']}.",
+             f"{word_en} 1 is {M[maps['1']]['name']}, {word_en.lower()} 2 is {M[maps['2']]['name']}.")
+    return f'''<div class="blindbar">
+    <div><div class="lbl">{rl("Замеры по моделям", "Numbers by model")}</div><div class="bymodel stack">{bymodel}</div></div>
+    <button type="button" class="btn ghost reveal"{" hidden" if not BLIND else ""}>{rl("Показать ответ", "Show the answer")}</button>
+    <p class="answer"{" hidden" if BLIND else ""}>{ans}</p>
+  </div>'''
+
+
 def test2():
     notes = {
         "1": rl("6 ларьков: лапша, бао, шашлычки, фрукты, чай, пиво. Воки с паром, качающиеся фонарики, мокрый асфальт с отражениями, скутер с водителем, около 18 человечков.",
@@ -120,21 +147,10 @@ def test2():
         "2": rl("Ворота 夜市, неоновые вывески с bloom, вок с пламенем, мангал с устрицами и искрами, аквариумы, автомат с напитками, рыжий кот, два скутера с фарами в лужах.",
                 "A 夜市 gate, neon signs with bloom, a flaming wok, an oyster grill with sparks, fish tanks, a drinks machine, a ginger cat, two scooters whose headlights hit the puddles."),
     }
-    sides = ""
-    for v in "12":
-        k = BLIND_MAP[v]
-        enc = base64.b64encode(f"{k}|{M[k]['name']}|{M[k]['maker']}|{M[k]['logo']}".encode()).decode()
-        head = who(k) if not BLIND else f'<div class="who"><div>{rl("Вариант", "Variant")} {v}<small>{rl("модель скрыта", "model hidden")}</small></div></div>'
-        sides += f'''
-    <div class="side {k if not BLIND else "b"}" data-v="{enc}">
-      {head}
-      <a class="shot" data-local href="2-diorama/{v}/"><img src="media/d{v}.jpg" alt=""></a>
-      <p class="note">{notes[v]}</p>
-      <div class="cta"><a class="btn" data-local href="2-diorama/{v}/">{rl("Открыть", "Open")} ↗</a></div>
-    </div>'''
-    bymodel = "".join(f'''<div class="{k}"><span class="nm">{M[k]["name"]}</span>{clock(DATA[2][k][0])} · {usd(DATA[2][k][1])} <small>· CometAPI {usd(DATA[2][k][2])}</small></div>''' for k in "qh")
-    ans = rl(f"Вариант 1 — {M[BLIND_MAP['1']]['name']}, Вариант 2 — {M[BLIND_MAP['2']]['name']}.",
-             f"Variant 1 is {M[BLIND_MAP['1']]['name']}, Variant 2 is {M[BLIND_MAP['2']]['name']}.")
+    sides = "".join(blind_side(BLIND_MAP, v, rl("Вариант", "Variant"),
+                               f'''<a class="shot" data-local href="2-diorama/{v}/"><img src="media/d{v}.jpg" alt=""></a>''', notes,
+                               f'''<div class="cta"><a class="btn" data-local href="2-diorama/{v}/">{rl("Открыть", "Open")} ↗</a></div>''')
+                    for v in "12")
     return f'''<article class="test" id="diorama">
   {head_block(2, "poll", rl("Тест 02 / 03 · Three.js · вслепую", "Test 02 / 03 · Three.js · blind"),
               rl("Ночной рынок Шэньчжэня", "Shenzhen night market"),
@@ -142,37 +158,29 @@ def test2():
                  "A voxel diorama: a street after the rain, all cubes, all code. A 30-second fly-through on open, press <kbd>C</kbd> for a free camera. I won't say which is which: guess first."))}
   <div class="duel">{sides}
   </div>
-  <div class="blindbar">
-    <div><div class="lbl">{rl("Замеры по моделям", "Numbers by model")}</div><div class="bymodel stack">{bymodel}</div></div>
-    <button type="button" class="btn ghost" id="reveal"{" hidden" if not BLIND else ""}>{rl("Показать ответ", "Show the answer")}</button>
-    <p class="answer" id="answer"{" hidden" if BLIND else ""}>{ans}</p>
-  </div>
+  {blind_bar(2, BLIND_MAP, "Вариант", "Variant")}
   {prompt_block(2, "2-diorama.md")}
 </article>'''
 
 
 def test3():
     notes = {
-        "q": rl("«Тест 2» канала синей ручкой в тетради: семечка, линейка, домино, будильник будит хомяка-ботаника, тот кричит «Всем вайбкод-привет!», печать «10/10». Графика кодом, нейросети только для звука.",
+        "1": rl("«Тест 2» канала синей ручкой в тетради: семечка, линейка, домино, будильник будит хомяка-ботаника, тот кричит «Всем вайбкод-привет!», печать «10/10». Графика кодом, нейросети только для звука.",
                 "The channel's “Test 2” drawn in blue pen in a notebook: a seed, a ruler, dominoes, an alarm wakes the nerdy hamster, he shouts a greeting, a “10/10” stamp. Graphics in code, AI only for sound."),
-        "h": rl("Машина Голдберга на миллиметровке: импульс от промпта бежит к звонку, но за миллиметр до удара музыка обрывается — «ХОМЯК ВСЁ ЕЩЁ СПИТ!». Шутка про мой соло-тест Hydrogen.",
-                "A Goldberg machine on graph paper: the prompt's pulse runs to the bell, but a millimetre before the hit the music stops: “THE HAMSTER IS STILL ASLEEP!” A joke about my solo Hydrogen test."),
+        "2": rl("Машина Голдберга на миллиметровке: импульс от промпта бежит к звонку, но за миллиметр до удара музыка обрывается — «ХОМЯК ВСЁ ЕЩЁ СПИТ!». Шутка про мой прошлый соло-тест.",
+                "A Goldberg machine on graph paper: the prompt's pulse runs to the bell, but a millimetre before the hit the music stops: “THE HAMSTER IS STILL ASLEEP!” A joke about one of my earlier solo tests."),
     }
-    extra = {"q": rl("по часам 1:48:36, минус 6 мин зависшего вызова", "1:48:36 on the clock, minus a 6-min stalled call"), "h": ""}
-    sides = "".join(f'''
-    <div class="side {k}">
-      {who(k)}
-      <video src="3-intro/{"qwen4" if k == "q" else "hydrogen"}.mp4" poster="media/intro-{k}.jpg" controls playsinline preload="none"></video>
-      {metrics(3, k, extra[k])}
-      <p class="note">{notes[k]}</p>
-    </div>''' for k in "qh")
+    sides = "".join(blind_side(BLIND_MAP3, v, rl("Заставка", "Intro"),
+                               f'<video src="3-intro/{v}.mp4" poster="media/i{v}.jpg" controls playsinline preload="none"></video>', notes)
+                    for v in "12")
     return f'''<article class="test" id="intro">
-  {head_block(3, "appfile", rl("Тест 03 / 03 · OpenMontage · видео", "Test 03 / 03 · OpenMontage · video"),
+  {head_block(3, "appfile", rl("Тест 03 / 03 · OpenMontage · вслепую", "Test 03 / 03 · OpenMontage · blind"),
               rl("Заставка канала", "Channel intro"),
-              rl("Модель сама изучает мой канал и делает 10-секундную заставку в OpenMontage. $10 на всё: токены, музыка, звуки, голос, картинки. Обе сами нашли канал и разобрали прошлые ролики.",
-                 "The model studies my channel on its own and makes a 10-second intro in OpenMontage. $10 for everything: tokens, music, sounds, voice, images. Both found the channel and went through past videos by themselves."))}
+              rl("Модель сама изучает мой канал и делает 10-секундную заставку в OpenMontage. $10 на всё: токены, музыка, звуки, голос, картинки. Чья где, не говорю: голосуем в Telegram, какая заставка будет открывать мои ролики.",
+                 "The model studies my channel on its own and makes a 10-second intro in OpenMontage. $10 for everything: tokens, music, sounds, voice, images. I won't say which is which: vote in my Telegram for the intro that will open my videos."))}
   <div class="duel">{sides}
   </div>
+  {blind_bar(3, BLIND_MAP3, "Заставка", "Intro")}
   {prompt_block(3, "3-intro.md")}
 </article>'''
 
@@ -238,10 +246,10 @@ def stats():
 
 
 JS = """<script>
-(()=>{const b=document.getElementById('reveal');if(!b)return;b.addEventListener('click',()=>{
- for(const s of document.querySelectorAll('#diorama .side[data-v]')){const[k,name,maker,logo]=atob(s.dataset.v).split('|');
+for(const b of document.querySelectorAll('.reveal'))b.addEventListener('click',()=>{const t=b.closest('.test');
+ for(const s of t.querySelectorAll('.side[data-v]')){const[k,name,maker,logo]=atob(s.dataset.v).split('|');
   s.classList.remove('b');s.classList.add(k);s.querySelector('.who').innerHTML='<img src="'+logo+'" alt=""><div>'+name+'<small>'+maker+'</small></div>';}
- b.hidden=true;document.getElementById('answer').hidden=false;});})();
+ b.hidden=true;t.querySelector('.answer').hidden=false;});
 </script>"""
 
 
@@ -294,8 +302,8 @@ def page():
   <div class="kicker"><span class="n">04</span><i></i>{rl("Замеры", "Numbers")}</div>
   <h2>{rl("Время и <em>деньги</em>", "Time and <em>cost</em>")}</h2>
   {table()}
-  <p class="small">{rl("Время — работа модели от промпта до последнего ответа; минуты, когда висел запущенный моделью сервер или провайдер не отвечал, не считаем. Цена — по токенам, которые потратила каждая модель, по публичному прайсу за 1 млн: Qwen4-Max $1,50 вход / $4,50 выход, Gemini 4 Hydrogen $1,50 / $7,50; через CometAPI на 20% дешевле. В тесте 3 в цену входят ассеты (музыка, звуки, голос, картинки), оплаченные через CometAPI. Итоги посчитаны по точным токенам, поэтому с суммой строк могут разойтись на цент.",
-                         "Time is the model's working time from the prompt to its last answer; minutes when a server the model started hung or the provider did not answer are not counted. Price is from the tokens each model used at the public list price per 1M: Qwen4-Max $1.50 in / $4.50 out, Gemini 4 Hydrogen $1.50 / $7.50; 20% less via CometAPI. Test 3 includes assets (music, sounds, voice, images) paid through CometAPI. Totals are computed from exact token counts, so they may differ from the sum of the rows by a cent.")}</p>
+  <p class="small">{rl("Время — работа модели от промпта до последнего ответа; минуты, когда висел запущенный моделью сервер или провайдер не отвечал, не считаем. Цена — по токенам, которые потратила каждая модель, по публичному прайсу за 1 млн: Qwen4-Max $1,50 вход / $4,50 выход, Gemini 4 Hydrogen $1,50 / $7,50; через CometAPI на 20% дешевле. В тесте 3 в цену входят ассеты (музыка, звуки, голос, картинки), оплаченные через CometAPI.",
+                         "Time is the model's working time from the prompt to its last answer; minutes when a server the model started hung or the provider did not answer are not counted. Price is from the tokens each model used at the public list price per 1M: Qwen4-Max $1.50 in / $4.50 out, Gemini 4 Hydrogen $1.50 / $7.50; 20% less via CometAPI. Test 3 includes assets (music, sounds, voice, images) paid through CometAPI.")}</p>
 </section>
 <section class="tg"><img src="media/icons/plane.png" alt="">
 <div><b>@kostik_neuro</b><p>{rl("Кто какой вариант, голосования и новые тесты нейросетей — в Telegram-канале.", "Blind-test answers, polls and new AI model tests in my Telegram channel.")}</p></div>
