@@ -1,78 +1,203 @@
 <!doctype html>
-<html lang="en">
+<html lang="ru" class="ru" data-title-ru="Qwen4-Max vs Gemini 4 Hydrogen: три теста" data-title-en="Qwen4-Max vs Gemini 4 Hydrogen: three tests">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Qwen4-Max vs Gemini 4 Hydrogen</title>
-<style>
-  :root { --bg: #f6f5f1; --card: #ffffff; --text: #16181d; --muted: #5d6370; --line: #e3e1da; --q: #2D5BFF; --h: #00A0A8; }
-  @media (prefers-color-scheme: dark) { :root { --bg: #0b0d14; --card: #141826; --text: #e9ecf5; --muted: #8d94ab; --line: #232a3d; } }
-  * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 system-ui, "Segoe UI", sans-serif; }
-  main { max-width: 980px; margin: 0 auto; padding: 32px 16px 64px; }
-  h1 { font-size: 30px; margin: 0 0 6px; letter-spacing: -0.02em; }
-  .sub { color: var(--muted); margin: 0 0 28px; }
-  .test { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 18px; margin-bottom: 16px; }
-  .test h2 { font-size: 18px; margin: 0 0 4px; }
-  .test p { color: var(--muted); margin: 0 0 14px; font-size: 14px; }
-  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-  .col { border-radius: 8px; padding: 12px; border: 1px solid var(--line); border-left-width: 5px; }
-  .col b { display: block; margin-bottom: 4px; }
-  .col small { color: var(--muted); display: block; margin-bottom: 8px; }
-  .q { border-left-color: var(--q); } .h { border-left-color: var(--h); }
-  a { color: inherit; } .links a { display: inline-block; margin: 0 12px 6px 0; }
-  video { width: 100%; border-radius: 6px; display: block; margin-top: 8px; }
-  table { width: 100%; border-collapse: collapse; font-size: 14px; }
-  td, th { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; }
-  footer { color: var(--muted); font-size: 13px; margin-top: 28px; }
-  @media (max-width: 640px) { .cols { grid-template-columns: 1fr; } }
-</style>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Qwen4-Max vs Gemini 4 Hydrogen: три теста</title>
+<meta name="description" content="Дуэль Qwen4-Max и Gemini 4 Hydrogen: аркадная гонка, воксельный ночной рынок вслепую и заставка канала. Время и цена каждого теста, всё можно открыть в браузере.">
+<meta property="og:title" content="Qwen4-Max vs Gemini 4 Hydrogen: три теста">
+<meta property="og:description" content="Дуэль Qwen4-Max и Gemini 4 Hydrogen: аркадная гонка, воксельный ночной рынок вслепую и заставка канала. Время и цена каждого теста, всё можно открыть в браузере.">
+<meta property="og:image" content="https://kostikoneuro.github.io/qwen4-vs-hydrogen/media/race-q.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#F4EDE1">
+<link rel="icon" href="media/icons/hamster.png">
+<script src="assets/lang.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@800&family=Manrope:wght@500;700;800&display=swap">
+<link rel="stylesheet" href="assets/site.css">
 </head>
-<body>
-<main>
-  <h1>Qwen4-Max vs Gemini 4 Hydrogen</h1>
-  <p class="sub">Same short prompts, maximum reasoning for both, no hints. Play the games and dioramas right here.
-    <br>Те же промпты, максимум размышлений, без подсказок. Играйте прямо в браузере.
-    · <a href="https://github.com/KostiKoNeuro/qwen4-vs-hydrogen">Prompts and costs on GitHub</a>
-    · <a href="https://t.me/kostik_neuro">Telegram</a></p>
-
-  <section class="test">
-    <h2>1 · Neon Night Racer</h2>
-    <p>An 80s arcade racer from one prompt. Аркадная гонка в стиле 80-х.</p>
-    <div class="cols">
-      <div class="col q"><b>Qwen4-Max</b><small>Enter = start, arrows / AD = steer (auto throttle), ↓ = brake, Space = nitro, P = pause, M = sound</small><div class="links"><a href="1-race/qwen4/">Play</a></div></div>
-      <div class="col h"><b>Gemini 4 Hydrogen</b><small>Enter or Space = start, ↑ / W = throttle, arrows / AD = steer, ↓ / S = brake, Space or Shift = nitro, Esc = car select</small><div class="links"><a href="1-race/hydrogen/">Play</a></div></div>
+<body><main>
+<header class="top">
+  <a class="brand" href="https://www.youtube.com/@kosti_neuro" target="_blank" rel="noopener">
+    <img src="media/icons/hamster.png" alt="">
+    <span><b>Ботанутый Костя</b><small><span class="l-ru">тесты нейросетей · YouTube</span><span class="l-en">AI model tests · YouTube</span></small></span>
+  </a>
+  <nav class="chips">
+    <div class="lang" role="group" aria-label="Язык / Language"><button type="button" data-set-lang="ru" aria-pressed="true">RU</button><button type="button" data-set-lang="en" aria-pressed="false">EN</button></div>
+    <a class="chip" href="https://t.me/kostik_neuro" target="_blank" rel="noopener"><img src="media/icons/plane.png" alt="">Telegram</a>
+    <a class="chip" href="https://github.com/KostiKoNeuro/qwen4-vs-hydrogen" target="_blank" rel="noopener"><img src="media/icons/folder.png" alt="">GitHub</a>
+  </nav>
+</header>
+<section class="hero">
+  <div class="hero-main">
+    <div class="kicker"><span class="n">00</span><i></i><span class="l-ru">Дуэль моделей · 20.11.2026</span><span class="l-en">Model duel · 20.11.2026</span></div>
+    <h1 class="duel-h1"><span class="mq">Qwen4-Max</span><em>vs</em><span class="mh">Gemini 4 Hydrogen</span></h1>
+    <p class="lead"><span class="l-ru">Новый флагман Alibaba против нового быстрого кодера Google. Три задания: аркадная гонка, ночной рынок из кубиков и заставка для моего канала. Одинаковые короткие промпты, максимум размышлений, никаких подсказок: каждая модель сама пишет, запускает и проверяет. Всё можно потыкать прямо здесь.</span><span class="l-en">Alibaba's new flagship against Google's new fast coder. Three tasks: an arcade racer, a voxel night market and an intro for my channel. The same short prompts, maximum reasoning, no hints: each model writes, runs and checks its own work. Try every result right here.</span></p>
+    <p class="mverdict"><b><span class="l-ru">×3,3</span><span class="l-en">×3.3</span></b> <span class="l-ru">— во столько Qwen4-Max дешевле, по времени почти поровну.</span><span class="l-en">— that's how much cheaper Qwen4-Max is; the time is nearly even.</span> <a href="#numbers"><span class="l-ru">Замеры</span><span class="l-en">Numbers</span> ↓</a></p>
+  </div>
+  <aside class="duelcard">
+    <div class="cap"><span class="l-ru">Итог трёх тестов</span><span class="l-en">Three tests in total</span></div>
+    <div class="tot" style="--mc:var(--q)">
+      <div class="who"><img src="media/logos/qwen.png" alt=""><div>Qwen4-Max<small style="display:none">Alibaba</small></div></div>
+      <div class="nums"><div><small><span class="l-ru">время</span><span class="l-en">time</span></small>2:46:54<div class="mbar"><i style="width:100.0%"></i></div></div><div><small><span class="l-ru">официально</span><span class="l-en">list price</span></small><span class="l-ru">$5,67</span><span class="l-en">$5.67</span><div class="mbar"><i style="width:30.0%"></i></div></div></div>
+      <div class="sub"><span class="l-ru">через CometAPI</span><span class="l-en">via CometAPI</span> <span class="l-ru">$4,62</span><span class="l-en">$4.62</span></div>
     </div>
-  </section>
-
-  <section class="test">
-    <h2>2 · Night market voxel diorama</h2>
-    <p>Shenzhen after the rain, all cubes, all code. 30-second fly-through on open; press C for a free camera. Ночной рынок Шэньчжэня, клавиша C = свободная камера.</p>
-    <div class="cols">
-      <div class="col q"><b>Qwen4-Max</b><div class="links"><a href="2-diorama/qwen4/">Open</a></div></div>
-      <div class="col h"><b>Gemini 4 Hydrogen</b><div class="links"><a href="2-diorama/hydrogen/">Open</a></div></div>
+    <div class="tot" style="--mc:var(--h)">
+      <div class="who"><img src="media/logos/gemini.png" alt=""><div>Gemini 4 Hydrogen<small style="display:none">Google</small></div></div>
+      <div class="nums"><div><small><span class="l-ru">время</span><span class="l-en">time</span></small>2:39:48<div class="mbar"><i style="width:95.7%"></i></div></div><div><small><span class="l-ru">официально</span><span class="l-en">list price</span></small><span class="l-ru">$18,89</span><span class="l-en">$18.89</span><div class="mbar"><i style="width:100.0%"></i></div></div></div>
+      <div class="sub"><span class="l-ru">через CometAPI</span><span class="l-en">via CometAPI</span> <span class="l-ru">$15,34</span><span class="l-en">$15.34</span></div>
     </div>
-  </section>
+    <div class="verdict"><b><span class="l-ru">×3,3</span><span class="l-en">×3.3</span></b><span><span class="l-ru">во столько Qwen4-Max дешевле. По времени почти поровну.</span><span class="l-en">that's how much cheaper Qwen4-Max is. The time is nearly even.</span></span></div>
+  </aside>
+</section>
+<section class="stats"><div class="stat"><div class="v"><img src="media/icons/terminal.png" alt="">xhigh</div><p><span class="l-ru">максимум размышлений у обеих моделей</span><span class="l-en">top reasoning level for both models</span></p></div><div class="stat"><div class="v"><img src="media/icons/appfile.png" alt=""><span class="l-ru">1 промпт</span><span class="l-en">1 prompt</span></div><p><span class="l-ru">и не больше одной правки словами</span><span class="l-en">and at most one fix in words</span></p></div><div class="stat"><div class="v"><img src="media/icons/coin.png" alt="">$10</div><p><span class="l-ru">бюджет на прогон, всё включено</span><span class="l-en">budget per run, everything included</span></p></div><div class="stat"><div class="v"><img src="media/icons/monitors.png" alt=""><span class="l-ru">сама</span><span class="l-en">on its own</span></div><p><span class="l-ru">модель сама запускает и проверяет результат</span><span class="l-en">the model runs and checks its own result</span></p></div></section>
 
-  <section class="test">
-    <h2>3 · Channel intro (OpenMontage)</h2>
-    <p>The model studies the channel by itself and makes a 10-second intro; $10 for everything. Заставка канала, модель сама изучила канал.</p>
-    <div class="cols">
-      <div class="col q"><b>Qwen4-Max</b><video src="3-intro/qwen4.mp4" controls playsinline preload="metadata"></video></div>
-      <div class="col h"><b>Gemini 4 Hydrogen</b><video src="3-intro/hydrogen.mp4" controls playsinline preload="metadata"></video></div>
+<section class="section" id="tests">
+  <div class="kicker"><span class="n">01-03</span><i></i><span class="l-ru">Потыкай сам</span><span class="l-en">Try it yourself</span></div>
+  <h2><span class="l-ru">Три теста, <em>в браузере</em></span><span class="l-en">Three tests, <em>in your browser</em></span></h2>
+  <div class="rows">
+<article class="test" id="race">
+  <div class="test-head">
+    <div class="num">01<img src="media/icons/stopwatch.png" alt=""></div>
+    <div><div class="meta"><span class="l-ru">Тест 01 / 03 · браузерная игра</span><span class="l-en">Test 01 / 03 · browser game</span></div><h3><span class="l-ru">Спидран: Neon Night Racer</span><span class="l-en">Speedrun: Neon Night Racer</span></h3><p><span class="l-ru">Аркадная гонка в духе 80-х по одному промпту: неоновый город, трафик, нитро, synthwave кодом. Кто соберёт быстрее и дешевле, и в какую интереснее играть.</span><span class="l-en">An 80s arcade racer from one prompt: a neon city, traffic, nitro, synthwave written in code. Who builds it faster and cheaper, and which one is more fun to play.</span></p></div>
+  </div>
+  <div class="duel">
+    <div class="side q">
+      <div class="who"><img src="media/logos/qwen.png" alt=""><div>Qwen4-Max<small>Alibaba</small></div></div>
+      <a class="shot" data-local href="1-race/qwen4/"><img src="media/race-q.jpg" alt=""></a>
+      <div class="metrics">
+      <div class="metric"><small><span class="l-ru">Время работы</span><span class="l-en">Working time</span></small><b>25:18</b><div class="mbar"><i style="width:50.4%"></i></div></div>
+      <div class="metric"><small><span class="l-ru">Цена официально</span><span class="l-en">List price</span></small><b><span class="l-ru">$0,79</span><span class="l-en">$0.79</span></b><div class="mbar"><i style="width:13.6%"></i></div><em><span class="l-ru">через CometAPI</span><span class="l-en">via CometAPI</span> <span class="l-ru">$0,63</span><span class="l-en">$0.63</span></em></div>
     </div>
-  </section>
+      <p class="note"><span class="l-ru">Холмы, 4 полосы, тайм-атака с чекпоинтами, near-miss комбо до ×10, нитро до 422 км/ч, слоу-мо при аварии. Сам играл в свою игру ботом-автопилотом и починил двойной бип отсчёта.</span><span class="l-en">Hills, 4 lanes, a checkpoint time attack, near-miss combos up to ×10, nitro up to 422 km/h, slow-mo crashes. It played its own game with an autopilot bot and fixed a double countdown beep.</span></p>
+      <p class="keys"><span class="l-ru"><kbd>Enter</kbd> старт · <kbd>←</kbd><kbd>→</kbd> / <kbd>A</kbd><kbd>D</kbd> руль, газ сам · <kbd>↓</kbd> тормоз · <kbd>Space</kbd> нитро · <kbd>P</kbd> пауза · <kbd>M</kbd> звук</span><span class="l-en"><kbd>Enter</kbd> start · <kbd>←</kbd><kbd>→</kbd> / <kbd>A</kbd><kbd>D</kbd> steer, auto throttle · <kbd>↓</kbd> brake · <kbd>Space</kbd> nitro · <kbd>P</kbd> pause · <kbd>M</kbd> sound</span></p>
+      <div class="cta"><a class="btn" data-local href="1-race/qwen4/"><span class="l-ru">Играть</span><span class="l-en">Play</span> ↗</a></div>
+    </div>
+    <div class="side h">
+      <div class="who"><img src="media/logos/gemini.png" alt=""><div>Gemini 4 Hydrogen<small>Google</small></div></div>
+      <a class="shot" data-local href="1-race/hydrogen/"><img src="media/race-h.jpg" alt=""></a>
+      <div class="metrics">
+      <div class="metric"><small><span class="l-ru">Время работы</span><span class="l-en">Working time</span></small><b>50:12</b><div class="mbar"><i style="width:100.0%"></i></div><em><span class="l-ru">по часам 1:32:42: минус 6 мин зависшего вызова и 36 мин ожидания провайдера</span><span class="l-en">1:32:42 on the clock, minus a 6-min stalled call and 36 min waiting on the provider</span></em></div>
+      <div class="metric"><small><span class="l-ru">Цена официально</span><span class="l-en">List price</span></small><b><span class="l-ru">$5,80</span><span class="l-en">$5.80</span></b><div class="mbar"><i style="width:100.0%"></i></div><em><span class="l-ru">через CometAPI</span><span class="l-en">via CometAPI</span> <span class="l-ru">$4,64</span><span class="l-en">$4.64</span></em></div>
+    </div>
+      <p class="note"><span class="l-ru">Выбор машины, телеметрия аварии, слипстрим, предупреждение о встречке, горы на горизонте. Игру в браузере открыл всего 2 раза, проверял в основном чтением кода.</span><span class="l-en">Car select, crash telemetry, slipstream, an oncoming-traffic warning, mountains on the horizon. It opened the game in a browser only twice and checked mostly by reading the code.</span></p>
+      <p class="keys"><span class="l-ru"><kbd>Enter</kbd> или <kbd>Space</kbd> старт · <kbd>↑</kbd> / <kbd>W</kbd> газ · <kbd>←</kbd><kbd>→</kbd> / <kbd>A</kbd><kbd>D</kbd> руль · <kbd>↓</kbd> / <kbd>S</kbd> тормоз · <kbd>Space</kbd> или <kbd>Shift</kbd> нитро · <kbd>Esc</kbd> выбор машины</span><span class="l-en"><kbd>Enter</kbd> or <kbd>Space</kbd> start · <kbd>↑</kbd> / <kbd>W</kbd> throttle · <kbd>←</kbd><kbd>→</kbd> / <kbd>A</kbd><kbd>D</kbd> steer · <kbd>↓</kbd> / <kbd>S</kbd> brake · <kbd>Space</kbd> or <kbd>Shift</kbd> nitro · <kbd>Esc</kbd> car select</span></p>
+      <div class="cta"><a class="btn" data-local href="1-race/hydrogen/"><span class="l-ru">Играть</span><span class="l-en">Play</span> ↗</a></div>
+    </div>
+  </div>
+  <details class="prompt mini"><summary><span><span class="l-ru">Промпт теста</span><span class="l-en">The prompt</span> · <span class="l-ru">одинаковый для обеих</span><span class="l-en">same for both</span></span></summary>
+    <p class="pnote"><span class="l-ru">Дословно, как получили модели.</span><span class="l-en">Verbatim, in Russian, exactly as both models got it.</span></p>
+    <div class="ptext">Сделай браузерную аркадную гонку «Neon Night Racer»: ночное шоссе, неоновый synthwave-город, 80-е.
 
-  <section class="test">
-    <h2>Time and cost</h2>
-    <p>From the tokens each model used: official list price / CometAPI price (20% lower). Test 3 includes paid music, sounds and voice.</p>
-    <table>
-      <tr><th>Test</th><th>Qwen4-Max</th><th>Gemini 4 Hydrogen</th></tr>
-      <tr><td>1 Race</td><td>25 min · $0.79 list / $0.63 CometAPI</td><td>50 min · $5.80 list / $4.64 CometAPI</td></tr><tr><td>2 Diorama</td><td>39 min · $1.32 list / $1.05 CometAPI</td><td>44 min · $2.92 list / $2.33 CometAPI</td></tr><tr><td>3 Intro</td><td>102 min · $3.57 list / $2.94 CometAPI (assets $0.40)</td><td>66 min · $10.18 list / $8.37 CometAPI (assets $1.11)</td></tr><tr><th>Total</th><th>167 min · $5.67 list / $4.62 CometAPI</th><th>160 min · $18.89 list / $15.34 CometAPI</th></tr>
-    </table>
-  </section>
+Главное - ощущение бешеной скорости ночью, когда до аварии одна ошибка.
 
-  <footer>Ботанутый Костя · <a href="https://www.youtube.com/@kosti_neuro">YouTube</a> · <a href="https://t.me/kostik_neuro">Telegram</a></footer>
+Представь, что это игра для настоящего аркадного автомата: в неё хочется сыграть ещё раз. Удиви меня.
+
+Музыка и звуки - кодом, без внешних файлов. Итог - один index.html, библиотеки с CDN можно.
+
+Не задавай вопросов: собери, сыграй сам, почини, что сломано.</div></details>
+</article>
+<article class="test" id="diorama">
+  <div class="test-head">
+    <div class="num">02<img src="media/icons/poll.png" alt=""></div>
+    <div><div class="meta"><span class="l-ru">Тест 02 / 03 · Three.js · вслепую</span><span class="l-en">Test 02 / 03 · Three.js · blind</span></div><h3><span class="l-ru">Ночной рынок Шэньчжэня</span><span class="l-en">Shenzhen night market</span></h3><p><span class="l-ru">Воксельная диорама: улица после дождя, всё из кубиков, всё кодом. При открытии 30-секундный облёт, клавиша <kbd>C</kbd> — свободная камера. Чья где, не говорю: сначала угадайте сами.</span><span class="l-en">A voxel diorama: a street after the rain, all cubes, all code. A 30-second fly-through on open, press <kbd>C</kbd> for a free camera. I won't say which is which: guess first.</span></p></div>
+  </div>
+  <div class="duel">
+    <div class="side b" data-v="cXxRd2VuNC1NYXh8QWxpYmFiYXxtZWRpYS9sb2dvcy9xd2VuLnBuZw==">
+      <div class="who"><div><span class="l-ru">Вариант</span><span class="l-en">Variant</span> 1<small><span class="l-ru">модель скрыта</span><span class="l-en">model hidden</span></small></div></div>
+      <a class="shot" data-local href="2-diorama/1/"><img src="media/d1.jpg" alt=""></a>
+      <p class="note"><span class="l-ru">6 ларьков: лапша, бао, шашлычки, фрукты, чай, пиво. Воки с паром, качающиеся фонарики, мокрый асфальт с отражениями, скутер с водителем, около 18 человечков.</span><span class="l-en">6 stalls: noodles, bao, skewers, fruit, tea, beer. Steaming woks, swinging lanterns, wet asphalt with reflections, a scooter with a rider, about 18 little people.</span></p>
+      <div class="cta"><a class="btn" data-local href="2-diorama/1/"><span class="l-ru">Открыть</span><span class="l-en">Open</span> ↗</a></div>
+    </div>
+    <div class="side b" data-v="aHxHZW1pbmkgNCBIeWRyb2dlbnxHb29nbGV8bWVkaWEvbG9nb3MvZ2VtaW5pLnBuZw==">
+      <div class="who"><div><span class="l-ru">Вариант</span><span class="l-en">Variant</span> 2<small><span class="l-ru">модель скрыта</span><span class="l-en">model hidden</span></small></div></div>
+      <a class="shot" data-local href="2-diorama/2/"><img src="media/d2.jpg" alt=""></a>
+      <p class="note"><span class="l-ru">Ворота 夜市, неоновые вывески с bloom, вок с пламенем, мангал с устрицами и искрами, аквариумы, автомат с напитками, рыжий кот, два скутера с фарами в лужах.</span><span class="l-en">A 夜市 gate, neon signs with bloom, a flaming wok, an oyster grill with sparks, fish tanks, a drinks machine, a ginger cat, two scooters whose headlights hit the puddles.</span></p>
+      <div class="cta"><a class="btn" data-local href="2-diorama/2/"><span class="l-ru">Открыть</span><span class="l-en">Open</span> ↗</a></div>
+    </div>
+  </div>
+  <div class="blindbar">
+    <div><div class="lbl"><span class="l-ru">Замеры по моделям</span><span class="l-en">Numbers by model</span></div><div class="bymodel stack"><div class="q"><span class="nm">Qwen4-Max</span>39:18 · <span class="l-ru">$1,32</span><span class="l-en">$1.32</span> <small>· CometAPI <span class="l-ru">$1,05</span><span class="l-en">$1.05</span></small></div><div class="h"><span class="nm">Gemini 4 Hydrogen</span>43:48 · <span class="l-ru">$2,92</span><span class="l-en">$2.92</span> <small>· CometAPI <span class="l-ru">$2,33</span><span class="l-en">$2.33</span></small></div></div></div>
+    <button type="button" class="btn ghost" id="reveal"><span class="l-ru">Показать ответ</span><span class="l-en">Show the answer</span></button>
+    <p class="answer" id="answer" hidden><span class="l-ru">Вариант 1 — Qwen4-Max, Вариант 2 — Gemini 4 Hydrogen.</span><span class="l-en">Variant 1 is Qwen4-Max, Variant 2 is Gemini 4 Hydrogen.</span></p>
+  </div>
+  <details class="prompt mini"><summary><span><span class="l-ru">Промпт теста</span><span class="l-en">The prompt</span> · <span class="l-ru">одинаковый для обеих</span><span class="l-en">same for both</span></span></summary>
+    <p class="pnote"><span class="l-ru">Дословно, как получили модели.</span><span class="l-en">Verbatim, in Russian, exactly as both models got it.</span></p>
+    <div class="ptext">Сделай в браузере воксельную 3D-диораму ночного рынка в Шэньчжэне.
+
+После дождя: пар над воками, неон и фонарики, провода над головой, скутеры, маленькие люди едят и торгуются, мокрый асфальт отражает свет. Крошечный живой мир, который хочется поставить на паузу и разглядывать.
+
+Представь, что это работа на конкурс диорам и жюри смотрит её ровно 30 секунд. Как только страница открылась - плавный зацикленный облёт камеры на 30 секунд, без интерфейса. Клавиша C - свободная камера и обратно.
+
+Всё из кубиков и кодом, без моделей и текстур. Итог - один index.html, библиотеки с CDN можно.
+
+Не задавай вопросов: собери, посмотри облёт целиком, почини, что выглядит сломанным.</div></details>
+</article>
+<article class="test" id="intro">
+  <div class="test-head">
+    <div class="num">03<img src="media/icons/appfile.png" alt=""></div>
+    <div><div class="meta"><span class="l-ru">Тест 03 / 03 · OpenMontage · видео</span><span class="l-en">Test 03 / 03 · OpenMontage · video</span></div><h3><span class="l-ru">Заставка канала</span><span class="l-en">Channel intro</span></h3><p><span class="l-ru">Модель сама изучает мой канал и делает 10-секундную заставку в OpenMontage. $10 на всё: токены, музыка, звуки, голос, картинки. Обе сами нашли канал и разобрали прошлые ролики.</span><span class="l-en">The model studies my channel on its own and makes a 10-second intro in OpenMontage. $10 for everything: tokens, music, sounds, voice, images. Both found the channel and went through past videos by themselves.</span></p></div>
+  </div>
+  <div class="duel">
+    <div class="side q">
+      <div class="who"><img src="media/logos/qwen.png" alt=""><div>Qwen4-Max<small>Alibaba</small></div></div>
+      <video src="3-intro/qwen4.mp4" poster="media/intro-q.jpg" controls playsinline preload="none"></video>
+      <div class="metrics">
+      <div class="metric"><small><span class="l-ru">Время работы</span><span class="l-en">Working time</span></small><b>1:42:18</b><div class="mbar"><i style="width:100.0%"></i></div><em><span class="l-ru">по часам 1:48:36, минус 6 мин зависшего вызова</span><span class="l-en">1:48:36 on the clock, minus a 6-min stalled call</span></em></div>
+      <div class="metric"><small><span class="l-ru">Цена официально</span><span class="l-en">List price</span></small><b><span class="l-ru">$3,57</span><span class="l-en">$3.57</span></b><div class="mbar"><i style="width:35.1%"></i></div><em><span class="l-ru">через CometAPI</span><span class="l-en">via CometAPI</span> <span class="l-ru">$2,94</span><span class="l-en">$2.94</span> · <span class="l-ru">ассеты</span><span class="l-en">assets</span> <span class="l-ru">$0,40</span><span class="l-en">$0.40</span></em></div>
+    </div>
+      <p class="note"><span class="l-ru">«Тест 2» канала синей ручкой в тетради: семечка, линейка, домино, будильник будит хомяка-ботаника, тот кричит «Всем вайбкод-привет!», печать «10/10». Графика кодом, нейросети только для звука.</span><span class="l-en">The channel's “Test 2” drawn in blue pen in a notebook: a seed, a ruler, dominoes, an alarm wakes the nerdy hamster, he shouts a greeting, a “10/10” stamp. Graphics in code, AI only for sound.</span></p>
+    </div>
+    <div class="side h">
+      <div class="who"><img src="media/logos/gemini.png" alt=""><div>Gemini 4 Hydrogen<small>Google</small></div></div>
+      <video src="3-intro/hydrogen.mp4" poster="media/intro-h.jpg" controls playsinline preload="none"></video>
+      <div class="metrics">
+      <div class="metric"><small><span class="l-ru">Время работы</span><span class="l-en">Working time</span></small><b>1:05:48</b><div class="mbar"><i style="width:64.3%"></i></div></div>
+      <div class="metric"><small><span class="l-ru">Цена официально</span><span class="l-en">List price</span></small><b><span class="l-ru">$10,18</span><span class="l-en">$10.18</span></b><div class="mbar"><i style="width:100.0%"></i></div><em><span class="l-ru">через CometAPI</span><span class="l-en">via CometAPI</span> <span class="l-ru">$8,37</span><span class="l-en">$8.37</span> · <span class="l-ru">ассеты</span><span class="l-en">assets</span> <span class="l-ru">$1,11</span><span class="l-en">$1.11</span></em></div>
+    </div>
+      <p class="note"><span class="l-ru">Машина Голдберга на миллиметровке: импульс от промпта бежит к звонку, но за миллиметр до удара музыка обрывается — «ХОМЯК ВСЁ ЕЩЁ СПИТ!». Шутка про мой соло-тест Hydrogen.</span><span class="l-en">A Goldberg machine on graph paper: the prompt's pulse runs to the bell, but a millimetre before the hit the music stops: “THE HAMSTER IS STILL ASLEEP!” A joke about my solo Hydrogen test.</span></p>
+    </div>
+  </div>
+  <details class="prompt mini"><summary><span><span class="l-ru">Промпт теста</span><span class="l-en">The prompt</span> · <span class="l-ru">одинаковый для обеих</span><span class="l-en">same for both</span></span></summary>
+    <p class="pnote"><span class="l-ru">Дословно, как получили модели.</span><span class="l-en">Verbatim, in Russian, exactly as both models got it.</span></p>
+    <div class="ptext">Сделай заставку для YouTube-канала «Ботанутый Костя» - 10 секунд, 1920×1080, со звуком.
+
+Канал: https://www.youtube.com/@kosti_neuro. Сначала сам изучи канал: о чём он, как выглядит, какой характер у автора. Заставка должна быть про этот канал, а не про абстрактный AI-бренд.
+
+Представь, что это работа на конкурс заставок: жюри - лучшие моушн-дизайнеры мира, а победитель будет открывать каждый ролик канала. Нужна идея, а не летающий текст. Удиви меня.
+
+Название «Ботанутый Костя» - ровно так, и оно читается в кадре хотя бы последние 1,5 секунды.
+
+Работай в OpenMontage (C:\…\OpenMontage), проект назови intro-{MODEL}. Платная генерация - только через CometAPI (инструменты comet_* в OpenMontage). На всё, вместе с твоей собственной работой, у тебя $10. Все согласования одобрены заранее: иди до финального mp4 без остановок.
+
+Не задавай вопросов. В конце: путь к mp4, идея в одном абзаце, сколько потратил на CometAPI и что ты узнал о канале.</div></details>
+</article>
+  </div>
+</section>
+
+<section class="section" id="numbers">
+  <div class="kicker"><span class="n">04</span><i></i><span class="l-ru">Замеры</span><span class="l-en">Numbers</span></div>
+  <h2><span class="l-ru">Время и <em>деньги</em></span><span class="l-en">Time and <em>cost</em></span></h2>
+  <div class="mtables"><table><thead><tr><th colspan="4" class="g q">Qwen4-Max</th></tr>
+      <tr><th scope="col"><span class="l-ru">Тест</span><span class="l-en">Test</span></th><th scope="col"><span class="l-ru">Время</span><span class="l-en">Time</span></th><th scope="col"><span class="l-ru">Офиц.</span><span class="l-en">List</span></th><th scope="col">CometAPI</th></tr></thead>
+      <tbody><tr><th scope="row"><span class="n">01</span><span class="l-ru">Спидран: гонка</span><span class="l-en">Speedrun: racer</span></th><td>25:18</td><td><span class="l-ru">$0,79</span><span class="l-en">$0.79</span></td><td><span class="l-ru">$0,63</span><span class="l-en">$0.63</span></td></tr><tr><th scope="row"><span class="n">02</span><span class="l-ru">Ночной рынок</span><span class="l-en">Night market</span></th><td>39:18</td><td><span class="l-ru">$1,32</span><span class="l-en">$1.32</span></td><td><span class="l-ru">$1,05</span><span class="l-en">$1.05</span></td></tr><tr><th scope="row"><span class="n">03</span><span class="l-ru">Заставка канала</span><span class="l-en">Channel intro</span></th><td>1:42:18</td><td><span class="l-ru">$3,57</span><span class="l-en">$3.57</span>*</td><td><span class="l-ru">$2,94</span><span class="l-en">$2.94</span>*</td></tr></tbody><caption>* <span class="l-ru">с ассетами</span><span class="l-en">incl. assets</span> <span class="l-ru">$0,40</span><span class="l-en">$0.40</span></caption><tfoot><tr><th scope="row"><span class="l-ru">Итого</span><span class="l-en">Total</span></th><td>2:46:54</td><td><span class="l-ru">$5,67</span><span class="l-en">$5.67</span></td><td><span class="l-ru">$4,62</span><span class="l-en">$4.62</span></td></tr></tfoot></table><table><thead><tr><th colspan="4" class="g h">Gemini 4 Hydrogen</th></tr>
+      <tr><th scope="col"><span class="l-ru">Тест</span><span class="l-en">Test</span></th><th scope="col"><span class="l-ru">Время</span><span class="l-en">Time</span></th><th scope="col"><span class="l-ru">Офиц.</span><span class="l-en">List</span></th><th scope="col">CometAPI</th></tr></thead>
+      <tbody><tr><th scope="row"><span class="n">01</span><span class="l-ru">Спидран: гонка</span><span class="l-en">Speedrun: racer</span></th><td>50:12</td><td><span class="l-ru">$5,80</span><span class="l-en">$5.80</span></td><td><span class="l-ru">$4,64</span><span class="l-en">$4.64</span></td></tr><tr><th scope="row"><span class="n">02</span><span class="l-ru">Ночной рынок</span><span class="l-en">Night market</span></th><td>43:48</td><td><span class="l-ru">$2,92</span><span class="l-en">$2.92</span></td><td><span class="l-ru">$2,33</span><span class="l-en">$2.33</span></td></tr><tr><th scope="row"><span class="n">03</span><span class="l-ru">Заставка канала</span><span class="l-en">Channel intro</span></th><td>1:05:48</td><td><span class="l-ru">$10,18</span><span class="l-en">$10.18</span>*</td><td><span class="l-ru">$8,37</span><span class="l-en">$8.37</span>*</td></tr></tbody><caption>* <span class="l-ru">с ассетами</span><span class="l-en">incl. assets</span> <span class="l-ru">$1,11</span><span class="l-en">$1.11</span></caption><tfoot><tr><th scope="row"><span class="l-ru">Итого</span><span class="l-en">Total</span></th><td>2:39:48</td><td><span class="l-ru">$18,89</span><span class="l-en">$18.89</span></td><td><span class="l-ru">$15,34</span><span class="l-en">$15.34</span></td></tr></tfoot></table></div><div class="table-wrap wide"><table>
+    <thead><tr><th></th><th colspan="3" class="g q sep">Qwen4-Max</th><th colspan="3" class="g h sep">Gemini 4 Hydrogen</th></tr>
+    <tr><th scope="col"><span class="l-ru">Тест</span><span class="l-en">Test</span></th><th scope="col" class="sep"><span class="l-ru">Время</span><span class="l-en">Time</span></th><th scope="col"><span class="l-ru">Официально</span><span class="l-en">List</span></th><th scope="col">CometAPI</th><th scope="col" class="sep"><span class="l-ru">Время</span><span class="l-en">Time</span></th><th scope="col"><span class="l-ru">Официально</span><span class="l-en">List</span></th><th scope="col">CometAPI</th></tr></thead>
+    <tbody><tr><th scope="row"><a href="#race"><span class="n">01</span><span class="l-ru">Спидран: гонка</span><span class="l-en">Speedrun: racer</span></a></th><td class="sep">25:18</td><td><span class="l-ru">$0,79</span><span class="l-en">$0.79</span></td><td><span class="l-ru">$0,63</span><span class="l-en">$0.63</span></td><td class="sep">50:12</td><td><span class="l-ru">$5,80</span><span class="l-en">$5.80</span></td><td><span class="l-ru">$4,64</span><span class="l-en">$4.64</span></td></tr><tr><th scope="row"><a href="#diorama"><span class="n">02</span><span class="l-ru">Ночной рынок</span><span class="l-en">Night market</span></a></th><td class="sep">39:18</td><td><span class="l-ru">$1,32</span><span class="l-en">$1.32</span></td><td><span class="l-ru">$1,05</span><span class="l-en">$1.05</span></td><td class="sep">43:48</td><td><span class="l-ru">$2,92</span><span class="l-en">$2.92</span></td><td><span class="l-ru">$2,33</span><span class="l-en">$2.33</span></td></tr><tr><th scope="row"><a href="#intro"><span class="n">03</span><span class="l-ru">Заставка канала</span><span class="l-en">Channel intro</span></a></th><td class="sep">1:42:18</td><td><span class="l-ru">$3,57</span><span class="l-en">$3.57</span><br><small><span class="l-ru">ассеты</span><span class="l-en">assets</span> <span class="l-ru">$0,40</span><span class="l-en">$0.40</span></small></td><td><span class="l-ru">$2,94</span><span class="l-en">$2.94</span></td><td class="sep">1:05:48</td><td><span class="l-ru">$10,18</span><span class="l-en">$10.18</span><br><small><span class="l-ru">ассеты</span><span class="l-en">assets</span> <span class="l-ru">$1,11</span><span class="l-en">$1.11</span></small></td><td><span class="l-ru">$8,37</span><span class="l-en">$8.37</span></td></tr></tbody>
+    <tfoot><tr><th scope="row"><span class="l-ru">Итого</span><span class="l-en">Total</span></th><td class="sep">2:46:54</td><td><span class="l-ru">$5,67</span><span class="l-en">$5.67</span></td><td><span class="l-ru">$4,62</span><span class="l-en">$4.62</span></td><td class="sep">2:39:48</td><td><span class="l-ru">$18,89</span><span class="l-en">$18.89</span></td><td><span class="l-ru">$15,34</span><span class="l-en">$15.34</span></td></tr></tfoot>
+  </table></div>
+  <p class="small"><span class="l-ru">Время — работа модели от промпта до последнего ответа; минуты, когда висел запущенный моделью сервер или провайдер не отвечал, не считаем. Цена — по токенам, которые потратила каждая модель, по публичному прайсу за 1 млн: Qwen4-Max $1,50 вход / $4,50 выход, Gemini 4 Hydrogen $1,50 / $7,50; через CometAPI на 20% дешевле. В тесте 3 в цену входят ассеты (музыка, звуки, голос, картинки), оплаченные через CometAPI. Итоги посчитаны по точным токенам, поэтому с суммой строк могут разойтись на цент.</span><span class="l-en">Time is the model's working time from the prompt to its last answer; minutes when a server the model started hung or the provider did not answer are not counted. Price is from the tokens each model used at the public list price per 1M: Qwen4-Max $1.50 in / $4.50 out, Gemini 4 Hydrogen $1.50 / $7.50; 20% less via CometAPI. Test 3 includes assets (music, sounds, voice, images) paid through CometAPI. Totals are computed from exact token counts, so they may differ from the sum of the rows by a cent.</span></p>
+</section>
+<section class="tg"><img src="media/icons/plane.png" alt="">
+<div><b>@kostik_neuro</b><p><span class="l-ru">Кто какой вариант, голосования и новые тесты нейросетей — в Telegram-канале.</span><span class="l-en">Blind-test answers, polls and new AI model tests in my Telegram channel.</span></p></div>
+<a class="btn or" href="https://t.me/kostik_neuro" target="_blank" rel="noopener"><span class="l-ru">Подписаться</span><span class="l-en">Subscribe</span> ↗</a></section>
+<footer><span>© Ботанутый Костя · Qwen4-Max vs Gemini 4 Hydrogen · 20.11.2026</span><span><a href="https://www.youtube.com/@kosti_neuro">YouTube</a> · <a href="https://t.me/kostik_neuro">Telegram</a> · <a href="https://github.com/KostiKoNeuro/qwen4-vs-hydrogen">GitHub</a></span></footer>
 </main>
-</body>
-</html>
+<script>
+(()=>{const b=document.getElementById('reveal');if(!b)return;b.addEventListener('click',()=>{
+ for(const s of document.querySelectorAll('#diorama .side[data-v]')){const[k,name,maker,logo]=atob(s.dataset.v).split('|');
+  s.classList.remove('b');s.classList.add(k);s.querySelector('.who').innerHTML='<img src="'+logo+'" alt=""><div>'+name+'<small>'+maker+'</small></div>';}
+ b.hidden=true;document.getElementById('answer').hidden=false;});})();
+</script>
+</body></html>
